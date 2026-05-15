@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 /**
  * Lookup Service Module
  *
@@ -63,7 +62,7 @@ export class LookupService {
     initPromise = (async () => {
       try {
         if (!force) {
-          const cached = await this.getFromCache();
+          const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[] } | null;
           if (cached && !this.isCacheExpired(cached.timestamp)) {
             this.buildMapFromCache(cached.lookup, cached.tipos);
             isInitialized = true;
@@ -80,10 +79,12 @@ export class LookupService {
         await this.saveToCache();
         isInitialized = true;
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('[Atlas Comet] Erro ao inicializar LookupService:', error);
         // Fallback: If fetch fails, try to load from cache even if expired
-        const cached = await this.getFromCache();
+        const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[] } | null;
         if (cached) {
+          // eslint-disable-next-line no-console
           console.log('[Atlas Comet] Usando cache expirado devido a falha na API.');
           this.buildMapFromCache(cached.lookup, cached.tipos);
           isInitialized = true;
@@ -99,20 +100,22 @@ export class LookupService {
   }
 
   public static async getLastSyncTime(): Promise<number | null> {
-    const cached = await this.getFromCache();
+    const cached = (await this.getFromCache()) as { timestamp: number } | null;
     return cached ? cached.timestamp : null;
   }
 
-  private static parseFields(response: any) {
+  private static parseFields(response: unknown): void {
     lookupMap.clear();
     tipoList = [];
     this.cachedLeaves = null;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let fieldsArray: any[] = [];
     if (Array.isArray(response)) {
       fieldsArray = response;
-    } else if (response && response.ticket_fields) {
-      fieldsArray = response.ticket_fields;
+    } else if (response && typeof response === 'object' && 'ticket_fields' in response) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fieldsArray = (response as { ticket_fields: any[] }).ticket_fields;
     }
 
     if (!fieldsArray || fieldsArray.length === 0) {
@@ -120,11 +123,13 @@ export class LookupService {
     }
 
     // 1. Parse Tipo do Ticket
-    const tipoField = fieldsArray.find((f) => f.name === 'ticket_type' || f.label === 'Tipo');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tipoField = fieldsArray.find((f: any) => f.name === 'ticket_type' || f.label === 'Tipo');
     if (tipoField && tipoField.choices) {
       const choices = Array.isArray(tipoField.choices)
         ? tipoField.choices
         : Object.values(tipoField.choices);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const c of choices as any[]) {
         // Freshdesk might return simple strings or objects
         if (typeof c === 'string') {
@@ -142,14 +147,16 @@ export class LookupService {
 
     // 2. Parse Serviço Nível (Hierarchical - Freshdesk uses nested dictionaries/arrays)
     const servicoField = fieldsArray.find(
-      (f) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (f: any) =>
         f.type === 'nested_field' &&
         (f.name === 'custom_fields' || f.label?.toLowerCase().includes('serviço')),
     );
     if (servicoField && servicoField.choices) {
       let autoId = 10000; // Generate IDs since Freshdesk nested dictionaries lack IDs
 
-      const parseHierarchy = (choicesData: any, level: number, parents: LookupParent[]) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parseHierarchy = (choicesData: any, level: number, parents: LookupParent[]): void => {
         if (!choicesData) return;
 
         // Handle Array of strings or objects (usually Leaf nodes)
@@ -223,7 +230,7 @@ export class LookupService {
 
   // ─── Cache Management ────────────────────────────────────────────────────────
 
-  private static async getFromCache(): Promise<any> {
+  private static async getFromCache(): Promise<unknown> {
     return new Promise((resolve) => {
       if (!ContextManager.isValid()) {
         resolve(null);
@@ -255,7 +262,7 @@ export class LookupService {
     return Date.now() - timestamp > CACHE_TTL_MS;
   }
 
-  private static buildMapFromCache(lookupArray: any[], tipos: any[]) {
+  private static buildMapFromCache(lookupArray: [number, LookupEntry][], tipos: TipoEntry[]): void {
     lookupMap = new Map(lookupArray);
     tipoList = tipos;
     this.cachedLeaves = null;
@@ -282,6 +289,7 @@ export class LookupService {
   public static getParentChain(choiceId: number): LookupEntry[] {
     const entry = lookupMap.get(choiceId);
     if (!entry) {
+      // eslint-disable-next-line no-console
       console.log(`[Atlas Comet] LookupService: Entry with choiceId ${choiceId} not found.`);
       return [];
     }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 import { CONSTANTS } from './constants';
 
 /**

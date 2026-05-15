@@ -7,18 +7,6 @@
  * - atlas-comet-crossfade: smooth opacity transition between states
  */
 
-/* Comet loader: orbits in a continuous circle */
-@keyframes atlas-comet-orbit {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Comet head glow pulse — subtle breathing effect on the leading dot */
-@keyframes atlas-comet-glow {
-  0%, 100% { box-shadow: 0 0 6px 2px rgba(2, 172, 133, 0.85), 0 0 14px 4px rgba(2, 172, 133, 0.35); }
-  50%      { box-shadow: 0 0 10px 4px rgba(2, 172, 133, 1),    0 0 22px 6px rgba(2, 172, 133, 0.5);  }
-}
-
 /* Toast container entrance: fades in and slides up */
 @keyframes atlas-comet-fade-in {
   0%   { opacity: 0; transform: translateY(12px); }
@@ -41,66 +29,11 @@
    border: none !important;
    border-radius: 10px;
    padding: 24px;
-   min-height: 140px;
+   min-height: 280px;
    box-shadow: none !important;
    text-align: center;
    position: relative;
    overflow: hidden;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════════
- * CSS-Only Comet Loader
- * ═══════════════════════════════════════════════════════════════════════════════
- * Replaces the GIF-based loader for reliability (no dependency on extension
- * context or external image resources).
- *
- * Structure (single div, two pseudo-elements):
- *   ::before — Conic gradient masked to a thin ring, creating a fading trail
- *   ::after  — Small glowing dot at the leading edge (the comet head)
- *   The parent div spins continuously via atlas-comet-orbit.
- */
-.comet-pro-loader {
-   width: 80px;
-   height: 80px;
-   margin: 0 auto 15px auto;
-   display: block;
-   border-radius: 50%;
-   position: relative;
-   animation: atlas-comet-orbit 1.3s linear infinite;
-}
-
-/* Comet trail — conic gradient from transparent to brand green, masked to a ring */
-.comet-pro-loader::before {
-   content: '';
-   position: absolute;
-   inset: 0;
-   border-radius: 50%;
-   background: conic-gradient(
-      from 0deg,
-      transparent 0%,
-      transparent 50%,
-      rgba(2, 172, 133, 0.04) 60%,
-      rgba(2, 172, 133, 0.12) 70%,
-      rgba(2, 172, 133, 0.3)  82%,
-      #02ac85 100%
-   );
-   /* Mask punches out the center, leaving only a 3.5px ring */
-   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
-   mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 3px));
-}
-
-/* Comet head — glowing bright dot at the trail's leading edge (top center) */
-.comet-pro-loader::after {
-   content: '';
-   position: absolute;
-   top: -3px;
-   left: 50%;
-   width: 9px;
-   height: 9px;
-   transform: translateX(-50%);
-   background: #02ac85;
-   border-radius: 50%;
-   animation: atlas-comet-glow 1.3s ease-in-out infinite;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════

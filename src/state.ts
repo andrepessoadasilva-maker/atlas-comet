@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 import { CONSTANTS } from './constants';
 
 /**
@@ -25,7 +24,7 @@ export class AppState {
   /**
    * Private constructor to enforce Singleton pattern.
    */
-  private constructor() {}
+  private constructor() { }
 
   /**
    * Retrieves the singleton instance of the AppState.

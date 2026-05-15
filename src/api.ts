@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 /**
  * Freshdesk API Service Module (Main-World Bridge Pattern)
  *
@@ -75,7 +74,7 @@ interface BridgeRequest {
   requestId: string;
   url: string;
   method: string;
-  body?: any;
+  body?: unknown;
 }
 
 /**
@@ -235,7 +234,7 @@ export class FreshdeskAPI {
   private static async sendBridgeRequest(
     url: string,
     method: string,
-    body?: any,
+    body?: unknown,
   ): Promise<unknown> {
     // Wait for bridge to be fully loaded before sending any messages
     await this.injectBridge();
@@ -292,9 +291,9 @@ export class FreshdeskAPI {
    * Fetches the full ticket fields schema from Freshdesk's internal API.
    * This allows dynamic discovery of 'Tipo' and 'Serviço Nível' options.
    *
-   * @returns {Promise<any>} The parsed API response containing the ticket fields array.
+   * @returns {Promise<unknown>} The parsed API response containing the ticket fields array.
    */
-  public static async fetchTicketFields(): Promise<any> {
+  public static async fetchTicketFields(): Promise<unknown> {
     try {
       const url = `/api/_/ticket_fields`;
       return await this.sendBridgeRequest(url, 'GET');
@@ -309,9 +308,9 @@ export class FreshdeskAPI {
    * Fetches a Freshdesk ticket's properties via the internal JSON API.
    *
    * @param ticketId - The numeric ticket ID (e.g., "415782").
-   * @returns {Promise<any>} The ticket data payload from Freshdesk.
+   * @returns {Promise<unknown>} The ticket data payload from Freshdesk.
    */
-  public static async getTicket(ticketId: string, include?: string): Promise<any> {
+  public static async getTicket(ticketId: string, include?: string): Promise<unknown> {
     const url = include
       ? `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}?include=${include}`
       : `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}`;
@@ -369,10 +368,14 @@ export class FreshdeskAPI {
     // Faz um GET para pegar os dados atuais
     const getUrl = `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}`;
     try {
-      const rawResponse = (await this.sendBridgeRequest(getUrl, 'GET')) as any;
+      const rawResponse = (await this.sendBridgeRequest(getUrl, 'GET')) as Record<
+        string,
+        unknown
+      > | null;
 
       // Cobre as 3 formas possíveis que a Bridge/Freshdesk podem retornar os dados:
-      const actualTicket = rawResponse?.data || rawResponse?.ticket || rawResponse;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const actualTicket = (rawResponse?.data || rawResponse?.ticket || rawResponse) as any;
 
       if (actualTicket && Array.isArray(actualTicket.tags)) {
         if (actualTicket.tags.includes(CONSTANTS.VALUES.OFFLINE_TAG)) {
@@ -417,7 +420,7 @@ export class FreshdeskAPI {
     tags?: string[],
   ): Promise<void> {
     const url = `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}/update_properties`;
-    const payloadBody: any = { subject };
+    const payloadBody: Record<string, unknown> = { subject };
     if (tags) {
       payloadBody.tags = tags;
     }

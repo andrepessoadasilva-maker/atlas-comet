@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 import { AppState } from './state';
 import { TicketObserver } from './observer';
 import { CONSTANTS } from './constants';
@@ -38,7 +37,7 @@ class ExtensionController {
    * and internal navigation events (SPA popstate).
    */
   private setupMessageListener(): void {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener((message) => {
       if (!ContextManager.isValid()) return;
       if (message.type === CONSTANTS.EVENTS.NAVIGATED) {
         this.handleRouting(message.url);

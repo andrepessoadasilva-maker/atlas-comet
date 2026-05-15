@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 /**
  * Context Manager Service
  *
@@ -38,8 +37,8 @@ export class ContextManager {
    * bubble up from async calls or chrome API events.
    */
   public static setupGlobalProtection(): void {
-    const handleError = (error: any) => {
-      const msg = error?.message || String(error);
+    const handleError = (error: unknown): void => {
+      const msg = error instanceof Error ? error.message : String(error);
       if (
         msg.includes('Extension context invalidated') ||
         msg.includes('Contexto da extensão invalidado')
@@ -62,6 +61,7 @@ export class ContextManager {
 
     // Use console.log instead of warn/error to avoid polluting the
     // Extension Manager's error log (chrome://extensions).
+    // eslint-disable-next-line no-console
     console.log('[Atlas Comet] Contexto da extensão invalidado. Interrompendo execuções.');
 
     // Notify other components if needed (via event or direct call if they check isValid)
@@ -124,9 +124,9 @@ export class ContextManager {
       font-weight: bold;
       transition: opacity 0.2s;
     `;
-    btnReload.onmouseenter = () => (btnReload.style.opacity = '0.9');
-    btnReload.onmouseleave = () => (btnReload.style.opacity = '1');
-    btnReload.onclick = () => window.location.reload();
+    btnReload.onmouseenter = (): string => (btnReload.style.opacity = '0.9');
+    btnReload.onmouseleave = (): string => (btnReload.style.opacity = '1');
+    btnReload.onclick = (): void => window.location.reload();
 
     banner.appendChild(text);
     banner.appendChild(btnReload);

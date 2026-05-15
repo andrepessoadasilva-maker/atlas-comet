@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Atlas Comet",
-  "version": "1.2.183",
+  "version": "1.2.189",
   "description": "Atlas Comet: Tickets na rota certa. Automação e precisão para a tabulação de tickets no Freshdesk.",
   "permissions": [
     "webNavigation",

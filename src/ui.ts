@@ -1,9 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 import { CONSTANTS } from './constants';
 import { LookupService, LookupEntry } from './lookup';
 import { FreshdeskAPI } from './api';
 import { AppState } from './state';
 import { ContextManager } from './context';
+import lottie from 'lottie-web';
+import loaderJson from './loader_data';
+import { Logger } from './logger';
 
 /**
  * A secure UI Factory for generating dynamic modal elements in the DOM.
@@ -190,7 +192,7 @@ export class UIFactory {
   /**
    * Removes the offline warning label.
    */
-  private static removeOfflineLabel(): void {
+  public static removeOfflineLabel(): void {
     const label = document.getElementById('atlas-comet-offline-label');
     if (label) label.remove();
   }
@@ -1032,9 +1034,10 @@ export class UIFactory {
           toastContainer.className = 'atlas-toast-container';
           toastContainer.style.cssText = 'animation: atlas-comet-fade-in 0.3s ease-out forwards;';
 
-          // CSS-only Comet loader (replaces GIF for reliability — no dependency on extension context)
+          // Lottie animation container (Premium Experience)
           const cometLoader = document.createElement('div');
-          cometLoader.className = 'comet-pro-loader';
+          cometLoader.id = 'atlas-lottie-loader';
+          cometLoader.style.cssText = 'width: 200px; height: 200px; margin: 0 auto; display: block;';
 
           const loadingText = document.createElement('p');
           loadingText.style.cssText =
@@ -1044,6 +1047,15 @@ export class UIFactory {
           toastContainer.appendChild(cometLoader);
           toastContainer.appendChild(loadingText);
           modal.appendChild(toastContainer);
+
+          // Initialize Lottie animation immediately after container is added to DOM
+          lottie.loadAnimation({
+            container: cometLoader,
+            renderer: 'svg',
+            loop: true,
+            autoplay: true,
+            animationData: loaderJson,
+          });
         }
 
         // ─── Silent Subject Auto-Rename (DOM Scraping + V2 API Architecture) ───
@@ -1074,9 +1086,9 @@ export class UIFactory {
         // PASSO 1: Capturar visualmente e extrair IDs do Shadow DOM
         const mfeApp = document.querySelector(
           'mfe-application[app-id="fw-unified-mfe--contact-info"]',
-        );
-        if (mfeApp && (mfeApp as any).shadowRoot) {
-          const shadowRoot = (mfeApp as any).shadowRoot;
+        ) as HTMLElement & { shadowRoot: ShadowRoot };
+        if (mfeApp && mfeApp.shadowRoot) {
+          const shadowRoot = mfeApp.shadowRoot;
 
           const clientEl = shadowRoot.querySelector('a[href*="/contacts/"]');
           if (clientEl) {
@@ -1109,11 +1121,11 @@ export class UIFactory {
           try {
             const cRes = await fetch(`/api/v2/contacts/${contactId}`);
             if (cRes.ok) {
-              const cData = await cRes.json();
-              if (cData && cData.name) rawClient = cData.name;
+              const cData = (await cRes.json()) as Record<string, unknown>;
+              if (cData && cData.name) rawClient = cData.name as string;
             }
           } catch (e) {
-            console.log('[Atlas Comet] Erro no Plano A do Cliente API', e);
+            Logger.info('[Atlas Comet] Erro no Plano A do Cliente API', e);
           }
         }
 
@@ -1121,11 +1133,11 @@ export class UIFactory {
           try {
             const cmpRes = await fetch(`/api/v2/companies/${companyId}`);
             if (cmpRes.ok) {
-              const cmpData = await cmpRes.json();
-              if (cmpData && cmpData.name) rawCompany = cmpData.name;
+              const cmpData = (await cmpRes.json()) as Record<string, unknown>;
+              if (cmpData && cmpData.name) rawCompany = cmpData.name as string;
             }
           } catch (e) {
-            console.log('[Atlas Comet] Erro no Plano A da Empresa API', e);
+            Logger.info('[Atlas Comet] Erro no Plano A da Empresa API', e);
           }
         }
 
@@ -1167,11 +1179,12 @@ export class UIFactory {
                 iframe.style.display = 'none';
                 iframe.src = (teamInboxBtn as HTMLAnchorElement).href;
 
-                let timeout: any;
+                // eslint-disable-next-line prefer-const
+                let timeout: ReturnType<typeof setTimeout> | undefined;
                 const messageHandler = (event: MessageEvent) => {
                   if (event.data && event.data.type === 'ATLAS_COMET_TEAM_INBOX_RESULT') {
                     window.removeEventListener('message', messageHandler);
-                    clearTimeout(timeout);
+                    if (timeout) clearTimeout(timeout);
                     iframe.remove();
                     resolve({ success: true, companyName: event.data.companyName });
                   }
@@ -1269,9 +1282,10 @@ export class UIFactory {
 
             // Checkmark SVG icon — thin strokes, brand green
             const checkIcon = document.createElement('div');
-            checkIcon.style.cssText = 'margin-bottom: 16px; color: #02ac85;';
+            checkIcon.style.cssText =
+              'width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; color: #02ac85;';
             checkIcon.innerHTML = `
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <polyline points="8 12 11 15 16 9"/>
               </svg>
@@ -1307,9 +1321,10 @@ export class UIFactory {
 
             // Warning triangle SVG — thin strokes, muted coral
             const warnIcon = document.createElement('div');
-            warnIcon.style.cssText = 'margin-bottom: 16px; color: #d9534f;';
+            warnIcon.style.cssText =
+              'width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; color: #d9534f;';
             warnIcon.innerHTML = `
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
                 <line x1="12" y1="9" x2="12" y2="13"/>
                 <line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -1348,7 +1363,7 @@ export class UIFactory {
    * @param isClient - If true, limits the name to 4 words and removes trailing prepositions.
    * @returns {string} The formatted name.
    */
-  private static formatProperName(text: string, isClient: boolean = false): string {
+  public static formatProperName(text: string, isClient: boolean = false): string {
     if (!text || text === 'Empresa Indefinida' || text === 'Cliente Indefinido')
       return 'Indefinido';
 
@@ -1480,8 +1495,8 @@ export class UIFactory {
    * @param tagValue - The exact text value we are looking for inside the rendered span.
    */
   private static waitForOptionAndClick(tagValue: string): void {
-    let observer: MutationObserver;
-    let timeoutId: any;
+    let observer: MutationObserver | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * Tries to find the rendered HTML list element. If found, simulates a robust click event
@@ -1547,6 +1562,7 @@ export class UIFactory {
     // Fallback: Disconnect if the expected DOM element is not rendered within 10 seconds.
     timeoutId = setTimeout(() => {
       if (observer) observer.disconnect();
+      // eslint-disable-next-line no-console
       console.log('[Atlas Comet] Timeout waiting for tag dropdown option.');
     }, 10000);
   }
@@ -1580,7 +1596,7 @@ setInterval(() => {
   }
 }, 1000); // Verifica a cada 1 segundo
 
-function handleTicketNavigation(newId: string) {
+function handleTicketNavigation(newId: string): void {
   // Busca o título original do novo ticket e atualiza a tela suavemente
   fetch(`/api/v2/tickets/${newId}`)
     .then((res) => {

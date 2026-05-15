@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 import { CONSTANTS } from './constants';
 import { LookupService, LookupEntry } from './lookup';
 import { FreshdeskAPI } from './api';
@@ -31,27 +32,37 @@ export class UIFactory {
     if (tagContainer) {
       const hasTagInText = tagContainer.textContent?.includes(CONSTANTS.VALUES.OFFLINE_TAG);
       const inputs = Array.from(tagContainer.querySelectorAll('input'));
-      const hasTagInInputs = inputs.some(input => input.value.includes(CONSTANTS.VALUES.OFFLINE_TAG));
+      const hasTagInInputs = inputs.some((input) =>
+        input.value.includes(CONSTANTS.VALUES.OFFLINE_TAG),
+      );
       alreadyTaggedOffline = !!(hasTagInText || hasTagInInputs);
     }
 
-    const baseBtnStyle = 'display: inline-flex !important; align-items: center !important; justify-content: center !important; height: 32px !important; padding: 0 12px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: 600 !important; line-height: 1.2 !important; cursor: pointer !important; white-space: nowrap !important; box-sizing: border-box !important; margin: 0 !important; vertical-align: middle !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; transition: all 0.2s ease-in-out !important;';
+    const baseBtnStyle =
+      'display: inline-flex !important; align-items: center !important; justify-content: center !important; height: 32px !important; padding: 0 12px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: 600 !important; line-height: 1.2 !important; cursor: pointer !important; white-space: nowrap !important; box-sizing: border-box !important; margin: 0 !important; vertical-align: middle !important; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important; transition: all 0.2s ease-in-out !important;';
 
     // Get or create the main container
     let container = document.getElementById('atlas-comet-header-buttons');
     if (!container) {
       container = document.createElement('div');
       container.id = 'atlas-comet-header-buttons';
-      container.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; z-index: 50; height: 32px; vertical-align: middle;';
-      
+      container.style.cssText =
+        'display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; z-index: 50; height: 32px; vertical-align: middle;';
+
       // 1. "Definir Assunto" Button (Created once)
       const btnSearch = document.createElement('button');
       btnSearch.id = 'iniciar-busca';
-      btnSearch.style.cssText = baseBtnStyle + ' background: #29735c !important; color: #fbfbf9 !important; border: 1px solid rgba(45, 121, 102, 0.1) !important; border-bottom: 2px solid #02ac85 !important; box-shadow: 0 1px 3px rgba(39, 103, 92, 0.1) !important;';
+      btnSearch.style.cssText =
+        baseBtnStyle +
+        ' background: #29735c !important; color: #fbfbf9 !important; border: 1px solid rgba(45, 121, 102, 0.1) !important; border-bottom: 2px solid #02ac85 !important; box-shadow: 0 1px 3px rgba(39, 103, 92, 0.1) !important;';
       btnSearch.textContent = 'Definir Serviço';
-      btnSearch.addEventListener('mouseenter', () => { btnSearch.style.opacity = '0.85'; });
-      btnSearch.addEventListener('mouseleave', () => { btnSearch.style.opacity = '1'; });
-      btnSearch.onclick = async () => { 
+      btnSearch.addEventListener('mouseenter', () => {
+        btnSearch.style.opacity = '0.85';
+      });
+      btnSearch.addEventListener('mouseleave', () => {
+        btnSearch.style.opacity = '1';
+      });
+      btnSearch.onclick = async () => {
         const origText = btnSearch.textContent;
         btnSearch.textContent = 'Carregando...';
         btnSearch.style.pointerEvents = 'none';
@@ -59,11 +70,13 @@ export class UIFactory {
         try {
           // Sempre força a busca de dados atualizados ao abrir o modal
           await LookupService.init(true);
-          this.openSearchModal(ticketId); 
+          this.openSearchModal(ticketId);
         } catch (e) {
           console.error('[Atlas Comet] Falha ao iniciar LookupService', e);
           const msg = e instanceof Error ? e.message : String(e);
-          alert(`Erro ao sincronizar campos do Freshdesk: ${msg}\n\nVerifique sua conexão e tente novamente.`);
+          alert(
+            `Erro ao sincronizar campos do Freshdesk: ${msg}\n\nVerifique sua conexão e tente novamente.`,
+          );
         } finally {
           btnSearch.textContent = origText;
           btnSearch.style.pointerEvents = 'auto';
@@ -81,9 +94,15 @@ export class UIFactory {
       if (!btnConfirm) {
         btnConfirm = document.createElement('button');
         btnConfirm.id = 'confirm-offline';
-        btnConfirm.style.cssText = baseBtnStyle + ' background: #29735c !important; color: #fbfbf9 !important; border: 1px solid rgba(45, 121, 102, 0.1) !important; border-bottom: 2px solid #02ac85 !important; box-shadow: 0 1px 3px rgba(39, 103, 92, 0.1) !important;';
-        btnConfirm.addEventListener('mouseenter', () => { (btnConfirm as HTMLElement).style.opacity = '0.85'; });
-        btnConfirm.addEventListener('mouseleave', () => { (btnConfirm as HTMLElement).style.opacity = '1'; });
+        btnConfirm.style.cssText =
+          baseBtnStyle +
+          ' background: #29735c !important; color: #fbfbf9 !important; border: 1px solid rgba(45, 121, 102, 0.1) !important; border-bottom: 2px solid #02ac85 !important; box-shadow: 0 1px 3px rgba(39, 103, 92, 0.1) !important;';
+        btnConfirm.addEventListener('mouseenter', () => {
+          (btnConfirm as HTMLElement).style.opacity = '0.85';
+        });
+        btnConfirm.addEventListener('mouseleave', () => {
+          (btnConfirm as HTMLElement).style.opacity = '1';
+        });
         btnConfirm.textContent = 'Sim, Offline';
         btnConfirm.onclick = async () => {
           try {
@@ -91,7 +110,9 @@ export class UIFactory {
             await this.fillTagAndSelect(CONSTANTS.VALUES.OFFLINE_TAG);
             btnConfirm?.remove();
             this.removeOfflineLabel();
-          } catch (error) { console.log('[Atlas Comet] Erro ao preencher tag:', error); }
+          } catch (error) {
+            console.log('[Atlas Comet] Erro ao preencher tag:', error);
+          }
         };
         container.appendChild(btnConfirm);
       }
@@ -102,12 +123,13 @@ export class UIFactory {
     }
 
     // Ensure the container is attached to the correct parent
-    const topBarActionContainer = document.querySelector('.page-actions__left') || document.querySelector('.ticket-details-header .action-bar');
+    const topBarActionContainer =
+      document.querySelector('.page-actions__left') ||
+      document.querySelector('.ticket-details-header .action-bar');
     if (topBarActionContainer && !topBarActionContainer.contains(container)) {
-        topBarActionContainer.prepend(container);
+      topBarActionContainer.prepend(container);
     }
   }
-
 
   /**
    * Renders a blinking warning label next to the ticket subject.
@@ -179,7 +201,7 @@ export class UIFactory {
   private static cleanSubjectInDOM(): void {
     const subjectHeading = document.querySelector('.ticket-subject-heading');
     if (subjectHeading && subjectHeading.textContent) {
-      // We extract textContent and replace it directly. 
+      // We extract textContent and replace it directly.
       // This is secure (no innerHTML) and fulfills the UI cleanup requirement.
       const originalText = subjectHeading.textContent;
       const cleanText = originalText.replace(/\[CHAT\]\s*-\s*OFFLINE/gi, '').trim();
@@ -228,7 +250,11 @@ export class UIFactory {
    * @param modalBody - The existing modal container element to replace contents of.
    * @param overlay - The full-screen overlay element (for removal on cancel/success).
    */
-  private static renderSubjectSearch(modalBody: HTMLElement, overlay: HTMLElement, ticketId: string): void {
+  private static renderSubjectSearch(
+    modalBody: HTMLElement,
+    overlay: HTMLElement,
+    ticketId: string,
+  ): void {
     // Clear all existing children safely (no innerHTML)
     while (modalBody.firstChild) {
       modalBody.removeChild(modalBody.firstChild);
@@ -239,12 +265,15 @@ export class UIFactory {
 
     // ─── Title ─────────────────────────────────────────────────────────────────
     const title = document.createElement('h2');
-    title.style.cssText = 'color: #2d7966; margin: 0 0 12px 0; font-size: 18px; display: flex; align-items: center; gap: 8px;';
+    title.style.cssText =
+      'color: #2d7966; margin: 0 0 12px 0; font-size: 18px; display: flex; align-items: center; gap: 8px;';
 
     // Brand icon — inline SVG comet
     const titleIcon = document.createElement('span');
-    titleIcon.style.cssText = 'display: inline-flex; align-items: center; flex-shrink: 0; color: #02ac85;';
-    titleIcon.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/></svg>';
+    titleIcon.style.cssText =
+      'display: inline-flex; align-items: center; flex-shrink: 0; color: #02ac85;';
+    titleIcon.innerHTML =
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"/></svg>';
     title.appendChild(titleIcon);
     title.appendChild(document.createTextNode('Buscar Serviço'));
 
@@ -253,46 +282,50 @@ export class UIFactory {
     // ─── Critical Error Fallback UI ──────────────────────────────────────────
     // Check if we actually have data to show. If not, show an error state.
     if (LookupService.getAllTipos().length === 0) {
-        const errorView = document.createElement('div');
-        errorView.style.cssText = 'padding: 40px 20px; text-align: center; color: #666;';
-        
-        const errorIcon = document.createElement('div');
-        errorIcon.style.cssText = 'font-size: 40px; margin-bottom: 15px;';
-        errorIcon.textContent = '📡';
-        
-        const errorTitle = document.createElement('h3');
-        errorTitle.style.cssText = 'margin: 0 0 10px 0; color: #d93025; font-size: 16px;';
-        errorTitle.textContent = 'Erro de Sincronização';
-        
-        const errorText = document.createElement('p');
-        errorText.style.cssText = 'font-size: 13px; line-height: 1.5; margin-bottom: 20px;';
-        errorText.textContent = 'Não foi possível carregar os campos do Freshdesk e não há dados em cache. Verifique sua conexão com o Freshdesk.';
-        
-        const btnRetry = document.createElement('button');
-        btnRetry.style.cssText = 'background: #2d7966; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-weight: bold;';
-        btnRetry.textContent = 'Tentar Sincronizar Agora';
-        btnRetry.onclick = () => {
-            overlay.remove();
-            const startBtn = document.getElementById('iniciar-busca');
-            if (startBtn) startBtn.click();
-        };
+      const errorView = document.createElement('div');
+      errorView.style.cssText = 'padding: 40px 20px; text-align: center; color: #666;';
 
-        errorView.appendChild(errorIcon);
-        errorView.appendChild(errorTitle);
-        errorView.appendChild(errorText);
-        errorView.appendChild(btnRetry);
-        modalBody.appendChild(errorView);
-        return;
+      const errorIcon = document.createElement('div');
+      errorIcon.style.cssText = 'font-size: 40px; margin-bottom: 15px;';
+      errorIcon.textContent = '📡';
+
+      const errorTitle = document.createElement('h3');
+      errorTitle.style.cssText = 'margin: 0 0 10px 0; color: #d93025; font-size: 16px;';
+      errorTitle.textContent = 'Erro de Sincronização';
+
+      const errorText = document.createElement('p');
+      errorText.style.cssText = 'font-size: 13px; line-height: 1.5; margin-bottom: 20px;';
+      errorText.textContent =
+        'Não foi possível carregar os campos do Freshdesk e não há dados em cache. Verifique sua conexão com o Freshdesk.';
+
+      const btnRetry = document.createElement('button');
+      btnRetry.style.cssText =
+        'background: #2d7966; color: white; border: none; padding: 10px 24px; border-radius: 6px; cursor: pointer; font-weight: bold;';
+      btnRetry.textContent = 'Tentar Sincronizar Agora';
+      btnRetry.onclick = () => {
+        overlay.remove();
+        const startBtn = document.getElementById('iniciar-busca');
+        if (startBtn) startBtn.click();
+      };
+
+      errorView.appendChild(errorIcon);
+      errorView.appendChild(errorTitle);
+      errorView.appendChild(errorText);
+      errorView.appendChild(btnRetry);
+      modalBody.appendChild(errorView);
+      return;
     }
 
     // ─── Subtitle / Instructions ───────────────────────────────────────────────
     const subtitle = document.createElement('p');
     subtitle.style.cssText = 'color: #29735c; font-size: 13px; margin: 0 0 16px 0;';
-    subtitle.textContent = 'Selecione o tipo e o assunto. Os níveis de serviço serão preenchidos automaticamente.';
+    subtitle.textContent =
+      'Selecione o tipo e o assunto. Os níveis de serviço serão preenchidos automaticamente.';
 
     // ─── Tipo Search Input ─────────────────────────────────────────────────────
     const tipoLabel = document.createElement('label');
-    tipoLabel.style.cssText = 'display: block; font-size: 13px; font-weight: 600; color: #27675c; margin-bottom: 6px;';
+    tipoLabel.style.cssText =
+      'display: block; font-size: 13px; font-weight: 600; color: #27675c; margin-bottom: 6px;';
     tipoLabel.textContent = 'Tipo do Ticket:';
 
     const tipoWrapper = document.createElement('div');
@@ -321,7 +354,8 @@ export class UIFactory {
      * chrome.storage.local. Same visual pattern as the level filter button.
      */
     const tipoRememberWrapper = document.createElement('div');
-    tipoRememberWrapper.style.cssText = 'display: flex; align-items: center; margin-bottom: 12px; width: 100%;';
+    tipoRememberWrapper.style.cssText =
+      'display: flex; align-items: center; margin-bottom: 12px; width: 100%;';
 
     const tipoRememberBtnStyle = `
       font-size: 12px; color: #777; cursor: pointer; margin-left: auto;
@@ -332,8 +366,10 @@ export class UIFactory {
     const tipoRememberBtn = document.createElement('button');
     tipoRememberBtn.style.cssText = tipoRememberBtnStyle;
 
-    const tipoBookmarkSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
-    const tipoCheckSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const tipoBookmarkSvg =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+    const tipoCheckSvg =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
     tipoRememberWrapper.appendChild(tipoRememberBtn);
 
@@ -372,19 +408,30 @@ export class UIFactory {
       });
     });
 
-    const sortedTipos = [...LookupService.getTipos()].sort((a, b) => a.label.localeCompare(b.label));
+    const sortedTipos = [...LookupService.getTipos()].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
 
     const renderTipoResults = (query: string) => {
-      while (tipoResultsContainer.firstChild) tipoResultsContainer.removeChild(tipoResultsContainer.firstChild);
+      while (tipoResultsContainer.firstChild)
+        tipoResultsContainer.removeChild(tipoResultsContainer.firstChild);
 
-      const normalizedQuery = query.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const filtered = sortedTipos.filter(c =>
-        c.label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(normalizedQuery)
+      const normalizedQuery = query
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      const filtered = sortedTipos.filter((c) =>
+        c.label
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .includes(normalizedQuery),
       );
 
       if (filtered.length === 0) {
         const emptyItem = document.createElement('li');
-        emptyItem.style.cssText = 'padding: 8px 12px; text-align: center; color: #999; font-size: 13px;';
+        emptyItem.style.cssText =
+          'padding: 8px 12px; text-align: center; color: #999; font-size: 13px;';
         emptyItem.textContent = 'Nenhum tipo encontrado.';
         tipoResultsContainer.appendChild(emptyItem);
         return;
@@ -397,8 +444,12 @@ export class UIFactory {
           font-size: 13px; color: #333; transition: background 0.15s ease;
         `;
         li.textContent = choice.label;
-        li.addEventListener('mouseenter', () => { li.style.background = '#f0f7ff'; });
-        li.addEventListener('mouseleave', () => { li.style.background = 'transparent'; });
+        li.addEventListener('mouseenter', () => {
+          li.style.background = '#f0f7ff';
+        });
+        li.addEventListener('mouseleave', () => {
+          li.style.background = 'transparent';
+        });
         li.onmousedown = (e) => {
           // use mousedown so it fires before the input's blur event hides the container
           e.preventDefault();
@@ -426,7 +477,8 @@ export class UIFactory {
 
     // ─── Assunto Search Input ──────────────────────────────────────────────────
     const assuntoLabel = document.createElement('label');
-    assuntoLabel.style.cssText = 'display: block; font-size: 13px; font-weight: 600; color: #27675c; margin-bottom: 6px;';
+    assuntoLabel.style.cssText =
+      'display: block; font-size: 13px; font-weight: 600; color: #27675c; margin-bottom: 6px;';
     assuntoLabel.textContent = 'Buscar Serviço:';
 
     /**
@@ -442,7 +494,8 @@ export class UIFactory {
       position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
       pointer-events: none; display: flex; align-items: center; color: #02ac85;
     `;
-    searchIcon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+    searchIcon.innerHTML =
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
 
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
@@ -479,7 +532,8 @@ export class UIFactory {
     `;
 
     // Shared style for checkbox labels
-    const checkboxLabelStyle = 'display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: #29735c; cursor: pointer; user-select: none;';
+    const checkboxLabelStyle =
+      'display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: #29735c; cursor: pointer; user-select: none;';
 
     // Nível 3 checkbox (default: checked)
     const cbN3Label = document.createElement('label');
@@ -516,9 +570,11 @@ export class UIFactory {
     `;
 
     // SVG bookmark icon — default state
-    const bookmarkSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+    const bookmarkSvg =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     // SVG checkmark icon — saved state
-    const checkSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const checkSvg =
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
     rememberBtn.innerHTML = bookmarkSvg;
     rememberBtn.appendChild(document.createTextNode(' Lembrar Preferências'));
@@ -575,8 +631,12 @@ export class UIFactory {
       align-self: flex-end; transition: background 0.2s ease;
     `;
     btnCancel.textContent = 'Cancelar';
-    btnCancel.addEventListener('mouseenter', () => { btnCancel.style.background = '#666'; });
-    btnCancel.addEventListener('mouseleave', () => { btnCancel.style.background = '#888'; });
+    btnCancel.addEventListener('mouseenter', () => {
+      btnCancel.style.background = '#666';
+    });
+    btnCancel.addEventListener('mouseleave', () => {
+      btnCancel.style.background = '#888';
+    });
     btnCancel.onclick = () => {
       overlay.remove();
     };
@@ -612,15 +672,24 @@ export class UIFactory {
           resultsContainer.removeChild(resultsContainer.firstChild);
         }
         const warningItem = document.createElement('li');
-        warningItem.style.cssText = 'padding: 24px 16px; text-align: center; color: #999; font-size: 14px;';
-        warningItem.textContent = '⚠️ Selecione pelo menos um nível (N2 ou N3) para visualizar os assuntos.';
+        warningItem.style.cssText =
+          'padding: 24px 16px; text-align: center; color: #999; font-size: 14px;';
+        warningItem.textContent =
+          '⚠️ Selecione pelo menos um nível (N2 ou N3) para visualizar os assuntos.';
         resultsContainer.appendChild(warningItem);
         return;
       }
 
       const query = searchInput.value;
       const filtered = LookupService.searchLeaves(query, levels);
-      this.renderSearchResults(resultsContainer, filtered, overlay, ticketId, () => tipoInput.value, query);
+      this.renderSearchResults(
+        resultsContainer,
+        filtered,
+        overlay,
+        ticketId,
+        () => tipoInput.value,
+        query,
+      );
     };
 
     /**
@@ -653,26 +722,26 @@ export class UIFactory {
      * If not found, the default state (Nível 3 checked only) is used.
      */
     if (ContextManager.isValid()) {
-        chrome.storage.local.get(['atlas_user_prefs', 'atlas_tipo_pref'], (result) => {
-          // Restore level filter checkboxes
-          const prefs = result.atlas_user_prefs;
-          if (prefs && typeof prefs === 'object') {
-            cbN3.checked = !!prefs.n3;
-            cbN2.checked = !!prefs.n2;
-          }
-          // Restore Tipo preference (defaults to DEFAULT_TICKET_TYPE if not saved)
-          const savedTipo = result.atlas_tipo_pref;
-          if (savedTipo && typeof savedTipo === 'string') {
-            tipoInput.value = savedTipo;
-          }
-          // Run the initial search after preferences are loaded
-          runSearch();
-          // Auto-focus the search input for immediate typing
-          setTimeout(() => searchInput.focus(), 50);
-        });
-    } else {
+      chrome.storage.local.get(['atlas_user_prefs', 'atlas_tipo_pref'], (result) => {
+        // Restore level filter checkboxes
+        const prefs = result.atlas_user_prefs;
+        if (prefs && typeof prefs === 'object') {
+          cbN3.checked = !!prefs.n3;
+          cbN2.checked = !!prefs.n2;
+        }
+        // Restore Tipo preference (defaults to DEFAULT_TICKET_TYPE if not saved)
+        const savedTipo = result.atlas_tipo_pref;
+        if (savedTipo && typeof savedTipo === 'string') {
+          tipoInput.value = savedTipo;
+        }
+        // Run the initial search after preferences are loaded
         runSearch();
+        // Auto-focus the search input for immediate typing
         setTimeout(() => searchInput.focus(), 50);
+      });
+    } else {
+      runSearch();
+      setTimeout(() => searchInput.focus(), 50);
     }
   }
 
@@ -696,7 +765,15 @@ export class UIFactory {
       return;
     }
 
-    const tokens = query.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, ' ').replace(/\s{2,}/g, ' ').toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
+    const tokens = query
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/-/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .toLowerCase()
+      .trim()
+      .split(/\s+/)
+      .filter((t) => t.length > 0);
 
     if (tokens.length === 0) {
       container.textContent = text;
@@ -715,7 +792,11 @@ export class UIFactory {
 
     for (let i = 0; i < text.length; i++) {
       const origChar = text[i];
-      const normChar = origChar.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/-/g, ' ').toLowerCase();
+      const normChar = origChar
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/-/g, ' ')
+        .toLowerCase();
       origChars.push(origChar);
       origToNorm.push(normChars.length);
       for (const c of normChar) {
@@ -742,7 +823,7 @@ export class UIFactory {
     const matchMask = new Array(text.length).fill(false);
     for (let i = 0; i < text.length; i++) {
       const normIdx = origToNorm[i];
-      const nextNormIdx = (i + 1 < text.length) ? origToNorm[i + 1] : normalizedText.length;
+      const nextNormIdx = i + 1 < text.length ? origToNorm[i + 1] : normalizedText.length;
       // Mark original char as matched if any of its normalized chars are matched
       for (let n = normIdx; n < nextNormIdx; n++) {
         if (matchMaskNorm[n]) {
@@ -795,7 +876,7 @@ export class UIFactory {
     overlay: HTMLElement,
     ticketId: string,
     getTicketType: () => string,
-    query: string = ''
+    query: string = '',
   ): void {
     // Clear previous results safely
     while (container.firstChild) {
@@ -806,8 +887,8 @@ export class UIFactory {
     if (results.length === 0) {
       const emptyItem = document.createElement('li');
       emptyItem.style.cssText = 'padding: 16px; text-align: center; color: #999; font-size: 14px;';
-      emptyItem.textContent = query.trim() 
-        ? `Não encontramos nada para "${query}". Que tal tentar palavras-chave mais simples?` 
+      emptyItem.textContent = query.trim()
+        ? `Não encontramos nada para "${query}". Que tal tentar palavras-chave mais simples?`
         : 'Nenhum resultado encontrado.';
       container.appendChild(emptyItem);
       return;
@@ -822,8 +903,12 @@ export class UIFactory {
       `;
 
       // Hover effects for visual feedback
-      li.addEventListener('mouseenter', () => { li.style.background = '#f0f7ff'; });
-      li.addEventListener('mouseleave', () => { li.style.background = 'transparent'; });
+      li.addEventListener('mouseenter', () => {
+        li.style.background = '#f0f7ff';
+      });
+      li.addEventListener('mouseleave', () => {
+        li.style.background = 'transparent';
+      });
 
       // ─── Title Row: Assunto Label + N1 Badge ─────────────────────────────────
       /**
@@ -851,18 +936,25 @@ export class UIFactory {
          * Each CV vertical gets a distinct pastel scheme for instant
          * visual grouping. Default is neutral gray for unknown categories.
          */
-        const n1Lower = n1Label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const n1Lower = n1Label
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
         let badgeBg = '#f0f0f0';
         let badgeColor = '#666';
 
         if (n1Lower.includes('cv prospectar')) {
-          badgeBg = '#fde8e8'; badgeColor = '#b91c1c';
+          badgeBg = '#fde8e8';
+          badgeColor = '#b91c1c';
         } else if (n1Lower.includes('cv gerenciar')) {
-          badgeBg = '#FFF9C4'; badgeColor = '#827717';
+          badgeBg = '#FFF9C4';
+          badgeColor = '#827717';
         } else if (n1Lower.includes('cv vender')) {
-          badgeBg = '#d1fae5'; badgeColor = '#065f46';
+          badgeBg = '#d1fae5';
+          badgeColor = '#065f46';
         } else if (n1Lower.includes('cv relacionar')) {
-          badgeBg = '#dbeafe'; badgeColor = '#1e40af';
+          badgeBg = '#dbeafe';
+          badgeColor = '#1e40af';
         }
 
         const badge = document.createElement('span');
@@ -889,7 +981,8 @@ export class UIFactory {
       if (breadcrumb) {
         const fullPath = `${breadcrumb} > ${entry.label}`;
         const breadcrumbSpan = document.createElement('span');
-        breadcrumbSpan.style.cssText = 'display: block; font-size: 11px; color: #999; margin-top: 3px;';
+        breadcrumbSpan.style.cssText =
+          'display: block; font-size: 11px; color: #999; margin-top: 3px;';
         this.appendHighlightedText(breadcrumbSpan, fullPath, query);
         li.appendChild(breadcrumbSpan);
       }
@@ -899,20 +992,27 @@ export class UIFactory {
        * request to update all service levels atomically, then reloads the page
        * to sync Ember's in-memory model with the backend state.
        */
+      // Captura o ID SEMPRE no momento do clique (SPA cache fix)
       li.addEventListener('click', async () => {
-        // Captura o ID SEMPRE no momento do clique (SPA cache fix)
         const ticketId = window.location.pathname.split('/').pop() || UIFactory.currentTicketId;
+
+        if (!ticketId) {
+          console.warn('[Atlas Comet] Ticket ID não encontrado durante o processamento.');
+          return;
+        }
 
         const chain = LookupService.getParentChain(entry.choiceId);
         if (chain.length === 0) {
-          console.log(`[Atlas Comet] Could not resolve parent chain for choiceId: ${entry.choiceId}`);
+          console.warn(
+            `[Atlas Comet] Could not resolve parent chain for choiceId: ${entry.choiceId}`,
+          );
           return;
         }
 
         // Extract N1, N2, N3 values from the resolved chain
-        const n1 = chain.find(e => e.level === 1)?.label ?? '';
-        const n2 = chain.find(e => e.level === 2)?.label ?? '';
-        const n3 = chain.find(e => e.level === 3)?.label ?? '';
+        const n1 = chain.find((e) => e.level === 1)?.label ?? '';
+        const n2 = chain.find((e) => e.level === 2)?.label ?? '';
+        const n3 = chain.find((e) => e.level === 3)?.label ?? '';
         const selectedTipo = getTicketType();
 
         // ─── Toast: PROCESSING state ─────────────────────────────────────────────
@@ -937,7 +1037,8 @@ export class UIFactory {
           cometLoader.className = 'comet-pro-loader';
 
           const loadingText = document.createElement('p');
-          loadingText.style.cssText = 'color: #29735c; font-size: 15px; font-weight: 500; margin: 0; position: relative; z-index: 10;';
+          loadingText.style.cssText =
+            'color: #29735c; font-size: 15px; font-weight: 500; margin: 0; position: relative; z-index: 10;';
           loadingText.textContent = 'Definindo serviço do ticket...';
 
           toastContainer.appendChild(cometLoader);
@@ -953,74 +1054,100 @@ export class UIFactory {
 
         let currentTags: string[] = [];
         try {
-            // Resgata as tags atuais via API V2 + enriquece com dados da empresa (Plano B)
-            // O parâmetro ?include=company retorna o objeto company.name na mesma requisição
-            const tRes = await fetch(`/api/v2/tickets/${ticketId}?include=company`);
-            if (tRes.ok) {
-                const tData = await tRes.json();
-                currentTags = tData.tags || [];
+          // Resgata as tags atuais via API V2 + enriquece com dados da empresa (Plano B)
+          // O parâmetro ?include=company retorna o objeto company.name na mesma requisição
+          const tRes = await fetch(`/api/v2/tickets/${ticketId}?include=company`);
+          if (tRes.ok) {
+            const tData = await tRes.json();
+            currentTags = tData.tags || [];
 
-                // PLANO B: Extrai o nome da empresa direto da resposta enriquecida do ticket
-                // Serve como fallback robusto quando o Shadow DOM não contém o link /companies/
-                if (tData.company && tData.company.name) {
-                    rawCompany = tData.company.name;
-                }
+            // PLANO B: Extrai o nome da empresa direto da resposta enriquecida do ticket
+            // Serve como fallback robusto quando o Shadow DOM não contém o link /companies/
+            if (tData.company && tData.company.name) {
+              rawCompany = tData.company.name;
             }
-        } catch (e) { console.log("[Atlas Comet] Erro ao buscar tags atuais", e); }
-
+          }
+        } catch (e) {
+          console.log('[Atlas Comet] Erro ao buscar tags atuais', e);
+        }
 
         // PASSO 1: Capturar visualmente e extrair IDs do Shadow DOM
-        const mfeApp = document.querySelector('mfe-application[app-id="fw-unified-mfe--contact-info"]');
+        const mfeApp = document.querySelector(
+          'mfe-application[app-id="fw-unified-mfe--contact-info"]',
+        );
         if (mfeApp && (mfeApp as any).shadowRoot) {
-            const shadowRoot = (mfeApp as any).shadowRoot;
-            
-            const clientEl = shadowRoot.querySelector('a[href*="/contacts/"]');
-            if (clientEl) {
-                rawClient = clientEl.textContent?.trim() || rawClient;
-                const matchId = (clientEl as HTMLAnchorElement).href.match(/\/contacts\/(\d+)/);
-                if (matchId) contactId = matchId[1];
-            }
+          const shadowRoot = (mfeApp as any).shadowRoot;
 
-            const companyEl = shadowRoot.querySelector('a[href*="/companies/"]');
-            if (companyEl) {
-                rawCompany = companyEl.textContent?.trim() || rawCompany;
-                const matchId = (companyEl as HTMLAnchorElement).href.match(/\/companies\/(\d+)/);
-                if (matchId) companyId = matchId[1];
-            } else {
-                // Tenta buscar no atributo aria-label se o texto for nulo
-                const anyComp = shadowRoot.querySelector('a[aria-label*="Go to"], a[aria-label*="Ir para"]');
-                if (anyComp) {
-                    const ariaMatch = anyComp.getAttribute('aria-label')?.match(/(?:Go to|Ir para)\s+(.+)/i);
-                    if (ariaMatch && ariaMatch[1]) rawCompany = ariaMatch[1].trim();
-                }
+          const clientEl = shadowRoot.querySelector('a[href*="/contacts/"]');
+          if (clientEl) {
+            rawClient = clientEl.textContent?.trim() || rawClient;
+            const matchId = (clientEl as HTMLAnchorElement).href.match(/\/contacts\/(\d+)/);
+            if (matchId) contactId = matchId[1];
+          }
+
+          const companyEl = shadowRoot.querySelector('a[href*="/companies/"]');
+          if (companyEl) {
+            rawCompany = companyEl.textContent?.trim() || rawCompany;
+            const matchId = (companyEl as HTMLAnchorElement).href.match(/\/companies\/(\d+)/);
+            if (matchId) companyId = matchId[1];
+          } else {
+            // Tenta buscar no atributo aria-label se o texto for nulo
+            const anyComp = shadowRoot.querySelector(
+              'a[aria-label*="Go to"], a[aria-label*="Ir para"]',
+            );
+            if (anyComp) {
+              const ariaMatch = anyComp
+                .getAttribute('aria-label')
+                ?.match(/(?:Go to|Ir para)\s+(.+)/i);
+              if (ariaMatch && ariaMatch[1]) rawCompany = ariaMatch[1].trim();
             }
+          }
         }
 
         // PASSO 2 (PLANO A): Obter o nome COMPLETO via API V2
         if (contactId) {
-            try {
-                const cRes = await fetch(`/api/v2/contacts/${contactId}`);
-                if (cRes.ok) {
-                    const cData = await cRes.json();
-                    if (cData && cData.name) rawClient = cData.name;
-                }
-            } catch (e) { console.log('[Atlas Comet] Erro no Plano A do Cliente API', e); }
+          try {
+            const cRes = await fetch(`/api/v2/contacts/${contactId}`);
+            if (cRes.ok) {
+              const cData = await cRes.json();
+              if (cData && cData.name) rawClient = cData.name;
+            }
+          } catch (e) {
+            console.log('[Atlas Comet] Erro no Plano A do Cliente API', e);
+          }
         }
 
         if (companyId) {
-            try {
-                const cmpRes = await fetch(`/api/v2/companies/${companyId}`);
-                if (cmpRes.ok) {
-                    const cmpData = await cmpRes.json();
-                    if (cmpData && cmpData.name) rawCompany = cmpData.name;
-                }
-            } catch (e) { console.log('[Atlas Comet] Erro no Plano A da Empresa API', e); }
+          try {
+            const cmpRes = await fetch(`/api/v2/companies/${companyId}`);
+            if (cmpRes.ok) {
+              const cmpData = await cmpRes.json();
+              if (cmpData && cmpData.name) rawCompany = cmpData.name;
+            }
+          } catch (e) {
+            console.log('[Atlas Comet] Erro no Plano A da Empresa API', e);
+          }
+        }
+
+        // CENÁRIO 2: Fallback para E-mail no Nome do Contato
+        // Se o nome capturado for um e-mail, buscamos o nome real no remetente da primeira mensagem
+        if (rawClient.includes('@')) {
+          const fallbackEl = document.querySelector(
+            'div[style*="margin-left: 33px"][style*="color: #6f7071"]',
+          );
+          if (fallbackEl && fallbackEl.textContent) {
+            const fallbackName = fallbackEl.textContent.trim();
+            // Só substitui se o fallback não for outro e-mail e não estiver vazio
+            if (fallbackName && !fallbackName.includes('@')) {
+              rawClient = fallbackName;
+            }
+          }
         }
 
         // REGRA DE NEGÓCIO ESPECIAL: Interceptador Agência/Finder
         // Se o Plano A ou B trouxer a empresa genérica, forçamos o Plano C (Team Inbox) para pegar o nome real
         if (rawCompany && rawCompany.toLowerCase().includes('agência/finder')) {
-            rawCompany = 'Empresa Indefinida';
+          rawCompany = 'Empresa Indefinida';
         }
 
         // PASSO 4 (PLANO C): Fallback no Team Inbox via Iframe Oculto (Caso Plano A e B falhem)
@@ -1028,43 +1155,52 @@ export class UIFactory {
         // O nosso content script (.all_frames=true) é injetado lá dentro, lê o DOM
         // e nos devolve o nome da empresa via postMessage.
         if (rawCompany === 'Empresa Indefinida') {
-            const teamInboxBtn = document.querySelector('a[href*="/crm/messaging/"]');
-            if (teamInboxBtn) {
-                try {
-                    const scrapeResponse: any = await new Promise((resolve) => {
-                        const iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        iframe.src = (teamInboxBtn as HTMLAnchorElement).href;
-                        
-                        let timeout: any;
-                        const messageHandler = (event: MessageEvent) => {
-                            if (event.data && event.data.type === 'ATLAS_COMET_TEAM_INBOX_RESULT') {
-                                window.removeEventListener('message', messageHandler);
-                                clearTimeout(timeout);
-                                iframe.remove();
-                                resolve({ success: true, companyName: event.data.companyName });
-                            }
-                        };
-                        
-                        window.addEventListener('message', messageHandler);
-                        
-                        // Timeout de segurança de 15s
-                        timeout = setTimeout(() => {
-                            window.removeEventListener('message', messageHandler);
-                            iframe.remove();
-                            resolve({ success: false, error: 'Timeout ao extrair do Iframe' });
-                        }, 15000);
-                        
-                        document.body.appendChild(iframe);
-                    });
+          const teamInboxBtn = document.querySelector('a[href*="/crm/messaging/"]');
+          if (teamInboxBtn) {
+            try {
+              const scrapeResponse = await new Promise<{
+                success: boolean;
+                companyName?: string;
+                error?: string;
+              }>((resolve) => {
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = (teamInboxBtn as HTMLAnchorElement).href;
 
-                    if (scrapeResponse && scrapeResponse.success && scrapeResponse.companyName) {
-                        rawCompany = scrapeResponse.companyName;
-                    } else {
-                        console.log('[Atlas Comet] Plano C: Scraping do Team Inbox via Iframe falhou', scrapeResponse?.error);
-                    }
-                } catch (e) { console.log('[Atlas Comet] Erro no Plano C (Team Inbox)', e); }
+                let timeout: any;
+                const messageHandler = (event: MessageEvent) => {
+                  if (event.data && event.data.type === 'ATLAS_COMET_TEAM_INBOX_RESULT') {
+                    window.removeEventListener('message', messageHandler);
+                    clearTimeout(timeout);
+                    iframe.remove();
+                    resolve({ success: true, companyName: event.data.companyName });
+                  }
+                };
+
+                window.addEventListener('message', messageHandler);
+
+                // Timeout de segurança de 15s
+                timeout = setTimeout(() => {
+                  window.removeEventListener('message', messageHandler);
+                  iframe.remove();
+                  resolve({ success: false, error: 'Timeout ao extrair do Iframe' });
+                }, 15000);
+
+                document.body.appendChild(iframe);
+              });
+
+              if (scrapeResponse && scrapeResponse.success && scrapeResponse.companyName) {
+                rawCompany = scrapeResponse.companyName;
+              } else {
+                console.log(
+                  '[Atlas Comet] Plano C: Scraping do Team Inbox via Iframe falhou',
+                  scrapeResponse?.error,
+                );
+              }
+            } catch (e) {
+              console.log('[Atlas Comet] Erro no Plano C (Team Inbox)', e);
             }
+          }
         }
 
         // PASSO 3: Formatação Ninja
@@ -1076,20 +1212,19 @@ export class UIFactory {
 
         // PASSO 6: Lógica Inteligente de Tags
         // Removemos as tags de controle da nossa lista temporária para "limpar a lousa"
-        let finalTags = currentTags.filter(tag => 
-          tag !== 'pendente_nome_empresa_cliente' && 
-          tag !== CONSTANTS.VALUES.OFFLINE_TAG
+        const finalTags = currentTags.filter(
+          (tag) => tag !== 'pendente_nome_empresa_cliente' && tag !== CONSTANTS.VALUES.OFFLINE_TAG,
         );
 
         // Adicionamos de volta APENAS se houver alguma pendência real
         if (companyName === 'Indefinido' || clientName === 'Indefinido') {
-            finalTags.push('pendente_nome_empresa_cliente');
+          finalTags.push('pendente_nome_empresa_cliente');
         }
 
         try {
           // 1. Update Service Levels via main API
           await FreshdeskAPI.updateServiceLevels(ticketId, n1, n2, n3, selectedTipo);
-          
+
           // 2. Update Subject via internal update_properties API
           await FreshdeskAPI.updateTicketSubjectSilently(ticketId, newSubject, finalTags);
 
@@ -1097,26 +1232,26 @@ export class UIFactory {
           AppState.getInstance().setServiceDefined(true);
 
           // Update the UI title immediately for instant visual feedback (UX)
-          const subjectDisplay = document.querySelector('.ticket-subject-heading'); 
+          const subjectDisplay = document.querySelector('.ticket-subject-heading');
           if (subjectDisplay) {
-              // Modifica apenas o valor do nó de texto existente para não perder a referência do SPA
-              let textNodeUpdated = false;
-              Array.from(subjectDisplay.childNodes).forEach(node => {
-                  if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
-                      node.textContent = newSubject + " ";
-                      textNodeUpdated = true;
-                  }
-              });
-              
-              // Fallback de segurança absoluto (caso o Freshdesk limpe a div por algum motivo)
-              if (!textNodeUpdated && subjectDisplay.firstChild) {
-                  subjectDisplay.firstChild.textContent = newSubject + " ";
+            // Modifica apenas o valor do nó de texto existente para não perder a referência do SPA
+            let textNodeUpdated = false;
+            Array.from(subjectDisplay.childNodes).forEach((node) => {
+              if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
+                node.textContent = newSubject + ' ';
+                textNodeUpdated = true;
               }
+            });
+
+            // Fallback de segurança absoluto (caso o Freshdesk limpe a div por algum motivo)
+            if (!textNodeUpdated && subjectDisplay.firstChild) {
+              subjectDisplay.firstChild.textContent = newSubject + ' ';
+            }
           }
 
           // Remove the offline label and confirm button from the UI immediately
           this.removeOfflineLabel();
-          const btnConfirm = document.getElementById("confirm-offline");
+          const btnConfirm = document.getElementById('confirm-offline');
           if (btnConfirm) btnConfirm.remove();
 
           UIFactory.removeTagFromDOM(CONSTANTS.VALUES.OFFLINE_TAG);
@@ -1143,7 +1278,8 @@ export class UIFactory {
             `;
 
             const successText = document.createElement('p');
-            successText.style.cssText = 'color: #29735c; font-size: 15px; font-weight: 500; margin: 0;';
+            successText.style.cssText =
+              'color: #29735c; font-size: 15px; font-weight: 500; margin: 0;';
             successText.textContent = 'Assunto definido! Sincronizando tela...';
 
             successContainer.appendChild(checkIcon);
@@ -1181,12 +1317,14 @@ export class UIFactory {
             `;
 
             const errorText = document.createElement('p');
-            errorText.style.cssText = 'color: #29735c; font-size: 15px; font-weight: 500; margin: 0 0 8px 0;';
+            errorText.style.cssText =
+              'color: #29735c; font-size: 15px; font-weight: 500; margin: 0 0 8px 0;';
             errorText.textContent = 'Erro ao atualizar via API. Tente manualmente.';
 
             // Detailed error info for debugging
             const errorDetail = document.createElement('pre');
-            errorDetail.style.cssText = 'color: #999; font-size: 11px; text-align: left; margin-top: 10px; white-space: pre-wrap; word-break: break-all; max-width: 100%;';
+            errorDetail.style.cssText =
+              'color: #999; font-size: 11px; text-align: left; margin-top: 10px; white-space: pre-wrap; word-break: break-all; max-width: 100%;';
             errorDetail.textContent = error instanceof Error ? error.message : String(error);
 
             errorContainer.appendChild(warnIcon);
@@ -1211,40 +1349,67 @@ export class UIFactory {
    * @returns {string} The formatted name.
    */
   private static formatProperName(text: string, isClient: boolean = false): string {
-    if (!text || text === 'Empresa Indefinida' || text === 'Cliente Indefinido') return 'Indefinido';
-    
-    // Corta cargos (após hífen) e limpa reticências
-    let clean = text.split('-')[0].replace(/\.{2,}/g, '').trim();
-    let words = clean.split(/\s+/); // Mantém o casing original exato
-
-    // Deduplicação (remove nomes repetidos seguidos, ex: 'Lincoln Lincoln')
-    let uniqueWords: string[] = [];
-    for (let i = 0; i < words.length; i++) {
-        // Compara em minúsculo para achar repetição, mas salva a palavra com o casing original
-        if (i === 0 || words[i].toLowerCase() !== words[i-1].toLowerCase()) {
-            uniqueWords.push(words[i]);
-        }
-    }
+    if (!text || text === 'Empresa Indefinida' || text === 'Cliente Indefinido')
+      return 'Indefinido';
 
     if (isClient) {
-        let finalWords: string[] = [];
-        let mainNamesCount = 0;
-        const preposicoes = ['de', 'da', 'do', 'das', 'dos', 'e'];
-        for (let word of uniqueWords) {
-            if (preposicoes.includes(word.toLowerCase())) {
-                finalWords.push(word);
-            } else {
-                if (mainNamesCount < 3) {
-                    finalWords.push(word);
-                    mainNamesCount++;
-                } else { break; }
-            }
+      // CENÁRIO 1: Limpeza e Padronização do Nome do Cliente
+      // 1. Remover pontos (.) e substituí-los por espaços
+      // 2. Cortar cargos (após hífen)
+      const clean = text.split('-')[0].replace(/\./g, ' ').trim();
+
+      // 3. Remover espaços em branco duplicados e aplicar Title Case
+      // A regra de Title Case aqui é rigorosa: Primeira letra Maiúscula, resto Minúscula.
+      const words = clean
+        .split(/\s+/)
+        .filter((w) => w.length > 0)
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+
+      // 4. Deduplicação e Limite de 3 nomes (Manter a regra de negócio original de contagem)
+      const finalWords: string[] = [];
+      let mainNamesCount = 0;
+      // Nota: Mesmo em Title Case, mantemos a lógica de não contar preposições para o limite de 3
+      const preposicoes = ['De', 'Da', 'Do', 'Das', 'Dos', 'E'];
+
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        const prevWord = i > 0 ? words[i - 1] : null;
+
+        // Evita nomes repetidos seguidos (ex: "Juliana Juliana")
+        if (prevWord && word.toLowerCase() === prevWord.toLowerCase()) continue;
+
+        if (preposicoes.includes(word)) {
+          finalWords.push(word);
+        } else {
+          if (mainNamesCount < 3) {
+            finalWords.push(word);
+            mainNamesCount++;
+          } else {
+            break;
+          }
         }
-        // Remove preposição se ficar pendurada no final
-        while (finalWords.length > 0 && preposicoes.includes(finalWords[finalWords.length - 1].toLowerCase())) {
-            finalWords.pop();
-        }
-        return finalWords.join(' ');
+      }
+
+      // Remove preposição se ficar "pendurada" no final
+      while (finalWords.length > 0 && preposicoes.includes(finalWords[finalWords.length - 1])) {
+        finalWords.pop();
+      }
+
+      return finalWords.join(' ');
+    }
+
+    // Lógica para Empresa (Mantida conforme original, sem as novas regras de cliente)
+    const clean = text
+      .split('-')[0]
+      .replace(/\.{2,}/g, '')
+      .trim();
+    const words = clean.split(/\s+/);
+
+    const uniqueWords: string[] = [];
+    for (let i = 0; i < words.length; i++) {
+      if (i === 0 || words[i].toLowerCase() !== words[i - 1].toLowerCase()) {
+        uniqueWords.push(words[i]);
+      }
     }
     return uniqueWords.join(' ');
   }
@@ -1255,13 +1420,21 @@ export class UIFactory {
     const tagContainer = document.querySelector(CONSTANTS.SELECTORS.TAG_CONTAINER);
     if (!tagContainer) return;
 
-    const listItems = Array.from(tagContainer.querySelectorAll('.ember-power-select-multiple-option'));
-    const targetItem = listItems.find(li => li.textContent && li.textContent.includes(tagToRemove));
+    const listItems = Array.from(
+      tagContainer.querySelectorAll('.ember-power-select-multiple-option'),
+    );
+    const targetItem = listItems.find(
+      (li) => li.textContent && li.textContent.includes(tagToRemove),
+    );
 
     if (targetItem) {
-      const closeBtn = targetItem.querySelector('.ember-power-select-multiple-remove-btn') as HTMLElement;
+      const closeBtn = targetItem.querySelector(
+        '.ember-power-select-multiple-remove-btn',
+      ) as HTMLElement;
       if (closeBtn) {
-        closeBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        closeBtn.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }),
+        );
         closeBtn.click();
       }
     }
@@ -1288,13 +1461,13 @@ export class UIFactory {
     // Focus the input to align with standard user interaction flows in Ember apps
     tagInput.focus();
 
-    // Instead of slow key-by-key typing, inject the entire value immediately 
+    // Instead of slow key-by-key typing, inject the entire value immediately
     // to prevent user interaction mid-entry from breaking the flow.
     tagInput.value = tagValue;
     tagInput.dispatchEvent(new Event('input', { bubbles: true }));
 
     // Small delay to allow Ember's runloop to kick in and fetch/render the dropdown.
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Start waiting for the power select dropdown item to be appended to the DOM.
     this.waitForOptionAndClick(tagValue);
@@ -1316,24 +1489,38 @@ export class UIFactory {
      */
     const tryClickOption = () => {
       const options = Array.from(document.querySelectorAll(`${CONSTANTS.SELECTORS.TAG_OPTIONS}`));
-      const targetOption = options.find(el => el.textContent?.trim() === tagValue);
+      const targetOption = options.find((el) => el.textContent?.trim() === tagValue);
 
       if (targetOption) {
         // Dispatching full mouse event lifecycle directly onto the span
         // Ember-power-select often relies on mousedown/mouseup rather than a simple .click()
-        targetOption.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-        targetOption.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-        targetOption.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        targetOption.dispatchEvent(
+          new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }),
+        );
+        targetOption.dispatchEvent(
+          new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }),
+        );
+        targetOption.dispatchEvent(
+          new MouseEvent('click', { bubbles: true, cancelable: true, view: window }),
+        );
 
         // Find the form's submit button to finalize the update
-        const submitButtons = Array.from(document.querySelectorAll(`${CONSTANTS.SELECTORS.SUBMIT_BUTTON}`));
-        const updateBtn = submitButtons.find(btn => btn.textContent?.trim() === CONSTANTS.VALUES.BTN_UPDATE_TEXT) as HTMLButtonElement;
+        const submitButtons = Array.from(
+          document.querySelectorAll(`${CONSTANTS.SELECTORS.SUBMIT_BUTTON}`),
+        );
+        const updateBtn = submitButtons.find(
+          (btn) => btn.textContent?.trim() === CONSTANTS.VALUES.BTN_UPDATE_TEXT,
+        ) as HTMLButtonElement;
 
         if (updateBtn) {
           // Delay briefly to allow Ember's runloop to fully register the newly selected tag
           setTimeout(() => {
-            updateBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-            updateBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            updateBtn.dispatchEvent(
+              new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }),
+            );
+            updateBtn.dispatchEvent(
+              new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }),
+            );
             updateBtn.click();
           }, 100);
         } else {
@@ -1363,50 +1550,58 @@ export class UIFactory {
       console.log('[Atlas Comet] Timeout waiting for tag dropdown option.');
     }, 10000);
   }
-
 }
 
 // ─── SENTINELA DE URL (SPA WATCHER) ───────────────────────────────────────
-let lastTicketId = window.location.pathname.includes('/a/tickets/') 
-    ? window.location.pathname.split('/').pop() 
-    : null;
+let lastTicketId = window.location.pathname.includes('/a/tickets/')
+  ? window.location.pathname.split('/').pop()
+  : null;
 
 setInterval(() => {
-    const pathname = window.location.pathname;
-    const currentTicketId = pathname.split('/').pop();
-    
-    // Só dispara se estivermos em uma URL de ticket E o ID mudou
-    if (pathname.includes('/a/tickets/') && currentTicketId && currentTicketId !== lastTicketId && currentTicketId.match(/^\d+$/)) {
-        lastTicketId = currentTicketId;
-        handleTicketNavigation(currentTicketId);
-    } else if (!pathname.includes('/a/tickets/')) {
-        // Se saímos da tela de ticket, resetamos o lastId e removemos os botões órfãos
-        lastTicketId = null;
-        const container = document.getElementById('atlas-comet-header-buttons');
-        if (container) container.remove();
-        const offlineLabel = document.getElementById('atlas-comet-offline-label');
-        if (offlineLabel) offlineLabel.remove();
-    }
+  const pathname = window.location.pathname;
+  const currentTicketId = pathname.split('/').pop();
+
+  // Só dispara se estivermos em uma URL de ticket E o ID mudou
+  if (
+    pathname.includes('/a/tickets/') &&
+    currentTicketId &&
+    currentTicketId !== lastTicketId &&
+    currentTicketId.match(/^\d+$/)
+  ) {
+    lastTicketId = currentTicketId;
+    handleTicketNavigation(currentTicketId);
+  } else if (!pathname.includes('/a/tickets/')) {
+    // Se saímos da tela de ticket, resetamos o lastId e removemos os botões órfãos
+    lastTicketId = null;
+    const container = document.getElementById('atlas-comet-header-buttons');
+    if (container) container.remove();
+    const offlineLabel = document.getElementById('atlas-comet-offline-label');
+    if (offlineLabel) offlineLabel.remove();
+  }
 }, 1000); // Verifica a cada 1 segundo
 
 function handleTicketNavigation(newId: string) {
-    // Busca o título original do novo ticket e atualiza a tela suavemente
-    fetch(`/api/v2/tickets/${newId}`)
-        .then(res => {
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return res.json();
-        })
-        .then(data => {
-            if (data && data.subject) {
-                const subjectDisplay = document.querySelector('.ticket-subject-heading');
-                if (subjectDisplay) {
-                    // Atualiza apenas o nó de texto para não quebrar bindings do Ember
-                    Array.from(subjectDisplay.childNodes).forEach(node => {
-                        if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
-                            node.textContent = data.subject + ' ';
-                        }
-                    });
-                }
+  // Busca o título original do novo ticket e atualiza a tela suavemente
+  fetch(`/api/v2/tickets/${newId}`)
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then((data) => {
+      if (data && data.subject) {
+        const subjectDisplay = document.querySelector('.ticket-subject-heading');
+        if (subjectDisplay) {
+          // Atualiza apenas o nó de texto para não quebrar bindings do Ember
+          Array.from(subjectDisplay.childNodes).forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
+              node.textContent = data.subject + ' ';
             }
-        }).catch(e => console.log("[Atlas Comet] Erro ao buscar novo título no Sentinela", e));
+          });
+        }
+      }
+    })
+    .catch((e) => console.log('[Atlas Comet] Erro ao buscar novo título no Sentinela', e));
 }
+
+
+

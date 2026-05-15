@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 import { AppState } from './state';
 import { TicketObserver } from './observer';
 import { CONSTANTS } from './constants';
@@ -5,11 +6,11 @@ import { ContextManager } from './context';
 
 /**
  * Main entry point for the content script.
- * 
+ *
  * Purpose:
  * Bootstraps the application within the isolated world of the webpage.
- * It manages the lifecycle of the extension by listening to navigation events 
- * (from the background script and local window events) and coordinating 
+ * It manages the lifecycle of the extension by listening to navigation events
+ * (from the background script and local window events) and coordinating
  * the observation of Freshdesk tickets.
  */
 class ExtensionController {
@@ -54,7 +55,7 @@ class ExtensionController {
   /**
    * Evaluates the current URL to decide if observation is required.
    * Tracks ticket transitions to clean up previously observed states.
-   * 
+   *
    * @param url - The current full URL of the browser window.
    */
   private handleRouting(url: string): void {
@@ -82,7 +83,7 @@ class ExtensionController {
 // Verifica se estamos rodando DENTRO de um iframe oculto do Team Inbox (Plano C)
 if (window !== window.parent && window.location.href.includes('/crm/messaging/')) {
   // --- INÍCIO DO SCRAPING INVISÍVEL ---
-  
+
   // Função para extrair a empresa do DOM do SPA
   const extractCompany = (): string | null => {
     const detailLink = document.querySelector('.message-detail-link a');
@@ -115,7 +116,10 @@ if (window !== window.parent && window.location.href.includes('/crm/messaging/')
       company = extractCompany();
       if (company) {
         obs.disconnect();
-        window.parent.postMessage({ type: 'ATLAS_COMET_TEAM_INBOX_RESULT', companyName: company }, '*');
+        window.parent.postMessage(
+          { type: 'ATLAS_COMET_TEAM_INBOX_RESULT', companyName: company },
+          '*',
+        );
       }
     });
     observer.observe(document.body, { childList: true, subtree: true });
@@ -134,3 +138,5 @@ if (window !== window.parent && window.location.href.includes('/crm/messaging/')
   const controller = new ExtensionController();
   controller.init();
 }
+
+

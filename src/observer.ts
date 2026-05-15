@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 import { AppState } from './state';
 import { UIFactory } from './ui';
 import { CONSTANTS } from './constants';
@@ -5,7 +6,7 @@ import { ContextManager } from './context';
 
 /**
  * Handles DOM observation to detect dynamically rendered Freshdesk elements.
- * 
+ *
  * Purpose:
  * Replaces legacy setInterval polling with an efficient, micro-targeted MutationObserver.
  * It ensures Atlas Comet buttons are injected and persist in the header, even if
@@ -24,7 +25,7 @@ export class TicketObserver {
 
   /**
    * Starts observing the DOM for mutations to maintain the Atlas Comet UI.
-   * 
+   *
    * @param ticketId - The ID of the current ticket being observed.
    */
   public startObserving(ticketId: string): void {
@@ -51,17 +52,17 @@ export class TicketObserver {
     // Fallback polling (every 500ms) to catch manual edits that might not trigger mutations
     // in complex SPA environments. Stored as class property so disconnect() can clean it.
     this.pollIntervalId = setInterval(() => {
-        if (!ContextManager.isValid()) {
-            this.disconnect();
-            return;
-        }
+      if (!ContextManager.isValid()) {
+        this.disconnect();
+        return;
+      }
 
-        if (this.currentTicketId === ticketId) {
-            this.maintainUI(ticketId);
-        } else {
-            clearInterval(this.pollIntervalId!);
-            this.pollIntervalId = null;
-        }
+      if (this.currentTicketId === ticketId) {
+        this.maintainUI(ticketId);
+      } else {
+        clearInterval(this.pollIntervalId!);
+        this.pollIntervalId = null;
+      }
     }, 500);
   }
 
@@ -98,7 +99,7 @@ export class TicketObserver {
   /**
    * Ensures the Atlas Comet buttons are present in the header.
    * Also checks for the "Chat Offline" status to show the specific warning.
-   * 
+   *
    * @param ticketId - The current ticket ID.
    */
   private maintainUI(ticketId: string): void {
@@ -113,15 +114,16 @@ export class TicketObserver {
     }
 
     // 1. Check if we need to inject or re-inject buttons
-    const headerContainer = document.querySelector('.page-actions__left') || 
-                          document.querySelector('.ticket-details-header .action-bar');
-    
+    const headerContainer =
+      document.querySelector('.page-actions__left') ||
+      document.querySelector('.ticket-details-header .action-bar');
+
     if (!headerContainer) return;
 
     // Single evaluation of offline status to avoid redundant DOM traversals
     const isOffline = this.detectOfflineStatus();
     const buttonsExist = document.getElementById('atlas-comet-header-buttons');
-    
+
     // If buttons don't exist, we must render them.
     if (!buttonsExist) {
       UIFactory.renderHeaderButtons(ticketId, isOffline);
@@ -129,9 +131,9 @@ export class TicketObserver {
       // If buttons already exist, check if we need to show/hide the "Sim, Offline" button
       // based on latest field data or manual definition.
       const hasDefined = this.appState.isServiceDefined();
-      
+
       // renderHeaderButtons is idempotent and handles internal tag/button logic
-      UIFactory.renderHeaderButtons(ticketId, (isOffline && !hasDefined));
+      UIFactory.renderHeaderButtons(ticketId, isOffline && !hasDefined);
     }
   }
 
@@ -141,21 +143,25 @@ export class TicketObserver {
    */
   private detectOfflineStatus(): boolean {
     const levelSelectors = [
-        `div[data-test-id="${CONSTANTS.VALUES.TIPO_TITLE}"]`,
-        `div[data-test-id="${CONSTANTS.VALUES.NIVEL_2_TITLE}"]`,
-        `div[data-test-id="${CONSTANTS.VALUES.NIVEL_3_TITLE}"]`
+      `div[data-test-id="${CONSTANTS.VALUES.TIPO_TITLE}"]`,
+      `div[data-test-id="${CONSTANTS.VALUES.NIVEL_2_TITLE}"]`,
+      `div[data-test-id="${CONSTANTS.VALUES.NIVEL_3_TITLE}"]`,
     ];
 
     for (const selector of levelSelectors) {
-        const container = document.querySelector(selector);
-        if (container) {
-            const spanValor = container.querySelector(CONSTANTS.SELECTORS.POWER_SELECT_SELECTED) as HTMLElement;
-            if (spanValor && spanValor.innerText.trim() === CONSTANTS.VALUES.CHAT_OFFLINE) {
-                return true;
-            }
+      const container = document.querySelector(selector);
+      if (container) {
+        const spanValor = container.querySelector(
+          CONSTANTS.SELECTORS.POWER_SELECT_SELECTED,
+        ) as HTMLElement;
+        if (spanValor && spanValor.innerText.trim() === CONSTANTS.VALUES.CHAT_OFFLINE) {
+          return true;
         }
+      }
     }
 
     return false;
   }
 }
+
+

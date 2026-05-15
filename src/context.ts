@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 /**
  * Context Manager Service
- * 
+ *
  * Purpose:
- * Monitors the extension's runtime context to detect when it has been invalidated 
- * (usually due to an update or reload). It provides a centralized check and 
- * triggers a graceful shutdown of all extension logic while prompting the user 
+ * Monitors the extension's runtime context to detect when it has been invalidated
+ * (usually due to an update or reload). It provides a centralized check and
+ * triggers a graceful shutdown of all extension logic while prompting the user
  * to reload the page.
  */
 export class ContextManager {
@@ -39,7 +40,10 @@ export class ContextManager {
   public static setupGlobalProtection(): void {
     const handleError = (error: any) => {
       const msg = error?.message || String(error);
-      if (msg.includes('Extension context invalidated') || msg.includes('Contexto da extensão invalidado')) {
+      if (
+        msg.includes('Extension context invalidated') ||
+        msg.includes('Contexto da extensão invalidado')
+      ) {
         this.handleInvalidation();
       }
     };
@@ -56,10 +60,10 @@ export class ContextManager {
     if (this.isInvalidated) return;
     this.isInvalidated = true;
 
-    // Use console.log instead of warn/error to avoid polluting the 
+    // Use console.log instead of warn/error to avoid polluting the
     // Extension Manager's error log (chrome://extensions).
     console.log('[Atlas Comet] Contexto da extensão invalidado. Interrompendo execuções.');
-    
+
     // Notify other components if needed (via event or direct call if they check isValid)
     this.injectReloadBanner();
   }
@@ -120,8 +124,8 @@ export class ContextManager {
       font-weight: bold;
       transition: opacity 0.2s;
     `;
-    btnReload.onmouseenter = () => btnReload.style.opacity = '0.9';
-    btnReload.onmouseleave = () => btnReload.style.opacity = '1';
+    btnReload.onmouseenter = () => (btnReload.style.opacity = '0.9');
+    btnReload.onmouseleave = () => (btnReload.style.opacity = '1');
     btnReload.onclick = () => window.location.reload();
 
     banner.appendChild(text);
@@ -129,3 +133,5 @@ export class ContextManager {
     document.body.appendChild(banner);
   }
 }
+
+

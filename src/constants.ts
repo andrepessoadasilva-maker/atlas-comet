@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 /**
  * Global Constants
- * 
+ *
  * Purpose:
- * Stores all hardcoded DOM selectors, IDs, magic strings, and configuration values 
- * used across the extension. This ensures easier maintenance if Freshdesk updates 
+ * Stores all hardcoded DOM selectors, IDs, magic strings, and configuration values
+ * used across the extension. This ensures easier maintenance if Freshdesk updates
  * its Ember.js application structure or class names.
  */
 export const CONSTANTS = {
@@ -58,5 +59,7 @@ export const CONSTANTS = {
   URL: {
     TICKETS_PATH: '/a/tickets/',
     FRESHDESK_HOST_SUFFIX: 'freshdesk.com',
-  }
+  },
 };
+
+

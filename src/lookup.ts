@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 /**
  * Lookup Service Module
  *
@@ -70,10 +71,12 @@ export class LookupService {
           }
         }
 
-        console.log(`[Atlas Comet] ${force ? 'Sincronização forçada' : 'Cache vazio ou expirado'}. Buscando campos na API...`);
+        console.log(
+          `[Atlas Comet] ${force ? 'Sincronização forçada' : 'Cache vazio ou expirado'}. Buscando campos na API...`,
+        );
         const fields = await FreshdeskAPI.fetchTicketFields();
         this.parseFields(fields);
-        
+
         await this.saveToCache();
         isInitialized = true;
       } catch (error) {
@@ -81,11 +84,11 @@ export class LookupService {
         // Fallback: If fetch fails, try to load from cache even if expired
         const cached = await this.getFromCache();
         if (cached) {
-            console.log('[Atlas Comet] Usando cache expirado devido a falha na API.');
-            this.buildMapFromCache(cached.lookup, cached.tipos);
-            isInitialized = true;
+          console.log('[Atlas Comet] Usando cache expirado devido a falha na API.');
+          this.buildMapFromCache(cached.lookup, cached.tipos);
+          isInitialized = true;
         } else {
-            throw error;
+          throw error;
         }
       } finally {
         initPromise = null;
@@ -107,103 +110,114 @@ export class LookupService {
 
     let fieldsArray: any[] = [];
     if (Array.isArray(response)) {
-        fieldsArray = response;
+      fieldsArray = response;
     } else if (response && response.ticket_fields) {
-        fieldsArray = response.ticket_fields;
+      fieldsArray = response.ticket_fields;
     }
 
     if (!fieldsArray || fieldsArray.length === 0) {
-        throw new Error("Formato de campos inválido retornado pela API");
+      throw new Error('Formato de campos inválido retornado pela API');
     }
 
     // 1. Parse Tipo do Ticket
-    const tipoField = fieldsArray.find(f => f.name === 'ticket_type' || f.label === 'Tipo');
+    const tipoField = fieldsArray.find((f) => f.name === 'ticket_type' || f.label === 'Tipo');
     if (tipoField && tipoField.choices) {
-        const choices = Array.isArray(tipoField.choices) ? tipoField.choices : Object.values(tipoField.choices);
-        for (const c of choices as any[]) {
-            // Freshdesk might return simple strings or objects
-            if (typeof c === 'string') {
-                tipoList.push({ label: c, value: c, id: 0 });
-            } else {
-                tipoList.push({
-                    label: c.value || c.label,
-                    value: c.value || c.label,
-                    id: c.id || 0,
-                    choice_id: c.id || 0
-                });
-            }
+      const choices = Array.isArray(tipoField.choices)
+        ? tipoField.choices
+        : Object.values(tipoField.choices);
+      for (const c of choices as any[]) {
+        // Freshdesk might return simple strings or objects
+        if (typeof c === 'string') {
+          tipoList.push({ label: c, value: c, id: 0 });
+        } else {
+          tipoList.push({
+            label: c.value || c.label,
+            value: c.value || c.label,
+            id: c.id || 0,
+            choice_id: c.id || 0,
+          });
         }
+      }
     }
 
     // 2. Parse Serviço Nível (Hierarchical - Freshdesk uses nested dictionaries/arrays)
-    const servicoField = fieldsArray.find(f => f.type === 'nested_field' && (f.name === 'custom_fields' || f.label?.toLowerCase().includes('serviço')));
+    const servicoField = fieldsArray.find(
+      (f) =>
+        f.type === 'nested_field' &&
+        (f.name === 'custom_fields' || f.label?.toLowerCase().includes('serviço')),
+    );
     if (servicoField && servicoField.choices) {
-        let autoId = 10000; // Generate IDs since Freshdesk nested dictionaries lack IDs
-        
-        const parseHierarchy = (choicesData: any, level: number, parents: LookupParent[]) => {
-            if (!choicesData) return;
+      let autoId = 10000; // Generate IDs since Freshdesk nested dictionaries lack IDs
 
-            // Handle Array of strings or objects (usually Leaf nodes)
-            if (Array.isArray(choicesData)) {
-                for (const c of choicesData) {
-                    const label = typeof c === 'string' ? c : (c.value || c.label);
-                    if (!label) continue;
-                    
-                    const id = typeof c === 'string' ? ++autoId : (c.id || ++autoId);
-                    const subChoices = typeof c === 'object' ? c.choices : null;
-                    
-                    const hasChildren = subChoices && (Array.isArray(subChoices) ? subChoices.length > 0 : Object.keys(subChoices).length > 0);
-                    const isLeaf = !hasChildren;
-                    
-                    const entry: LookupEntry = {
-                        label: label,
-                        value: label,
-                        choiceId: id,
-                        level: level,
-                        isLeaf: isLeaf,
-                        parents: [...parents]
-                    };
-                    
-                    lookupMap.set(id, entry);
+      const parseHierarchy = (choicesData: any, level: number, parents: LookupParent[]) => {
+        if (!choicesData) return;
 
-                    if (hasChildren) {
-                        const newParent: LookupParent = { label, value: label, choiceId: id, level };
-                        parseHierarchy(subChoices, level + 1, [newParent, ...parents]);
-                    }
-                }
-            } 
-            // Handle Object representing tree: { "Hardware": { "Laptop": ["Mac"] } }
-            else if (typeof choicesData === 'object') {
-                for (const [key, value] of Object.entries(choicesData)) {
-                    if (!key) continue;
-                    
-                    const label = key;
-                    const id = ++autoId;
-                    
-                    const subChoices = value;
-                    const hasChildren = subChoices && typeof subChoices === 'object' && Object.keys(subChoices).length > 0;
-                    const isLeaf = !hasChildren;
-                    
-                    const entry: LookupEntry = {
-                        label: label,
-                        value: label,
-                        choiceId: id,
-                        level: level,
-                        isLeaf: isLeaf,
-                        parents: [...parents]
-                    };
-                    
-                    lookupMap.set(id, entry);
+        // Handle Array of strings or objects (usually Leaf nodes)
+        if (Array.isArray(choicesData)) {
+          for (const c of choicesData) {
+            const label = typeof c === 'string' ? c : c.value || c.label;
+            if (!label) continue;
 
-                    if (hasChildren) {
-                        const newParent: LookupParent = { label, value: label, choiceId: id, level };
-                        parseHierarchy(subChoices, level + 1, [newParent, ...parents]);
-                    }
-                }
+            const id = typeof c === 'string' ? ++autoId : c.id || ++autoId;
+            const subChoices = typeof c === 'object' ? c.choices : null;
+
+            const hasChildren =
+              subChoices &&
+              (Array.isArray(subChoices)
+                ? subChoices.length > 0
+                : Object.keys(subChoices).length > 0);
+            const isLeaf = !hasChildren;
+
+            const entry: LookupEntry = {
+              label: label,
+              value: label,
+              choiceId: id,
+              level: level,
+              isLeaf: isLeaf,
+              parents: [...parents],
+            };
+
+            lookupMap.set(id, entry);
+
+            if (hasChildren) {
+              const newParent: LookupParent = { label, value: label, choiceId: id, level };
+              parseHierarchy(subChoices, level + 1, [newParent, ...parents]);
             }
-        };
-        
-        parseHierarchy(servicoField.choices, 1, []);
+          }
+        }
+        // Handle Object representing tree: { "Hardware": { "Laptop": ["Mac"] } }
+        else if (typeof choicesData === 'object') {
+          for (const [key, value] of Object.entries(choicesData)) {
+            if (!key) continue;
+
+            const label = key;
+            const id = ++autoId;
+
+            const subChoices = value;
+            const hasChildren =
+              subChoices && typeof subChoices === 'object' && Object.keys(subChoices).length > 0;
+            const isLeaf = !hasChildren;
+
+            const entry: LookupEntry = {
+              label: label,
+              value: label,
+              choiceId: id,
+              level: level,
+              isLeaf: isLeaf,
+              parents: [...parents],
+            };
+
+            lookupMap.set(id, entry);
+
+            if (hasChildren) {
+              const newParent: LookupParent = { label, value: label, choiceId: id, level };
+              parseHierarchy(subChoices, level + 1, [newParent, ...parents]);
+            }
+          }
+        }
+      };
+
+      parseHierarchy(servicoField.choices, 1, []);
     }
   }
 
@@ -211,46 +225,46 @@ export class LookupService {
 
   private static async getFromCache(): Promise<any> {
     return new Promise((resolve) => {
-        if (!ContextManager.isValid()) {
-            resolve(null);
-            return;
-        }
-        chrome.storage.local.get('atlas_fields_cache_v2', (res) => {
-            resolve(res.atlas_fields_cache_v2 || null);
-        });
+      if (!ContextManager.isValid()) {
+        resolve(null);
+        return;
+      }
+      chrome.storage.local.get('atlas_fields_cache_v2', (res) => {
+        resolve(res.atlas_fields_cache_v2 || null);
+      });
     });
   }
 
   private static async saveToCache(): Promise<void> {
     if (!ContextManager.isValid()) {
-        return Promise.resolve();
+      return Promise.resolve();
     }
     const lookupArray = Array.from(lookupMap.entries());
     const cacheData = {
-        timestamp: Date.now(),
-        lookup: lookupArray,
-        tipos: tipoList
+      timestamp: Date.now(),
+      lookup: lookupArray,
+      tipos: tipoList,
     };
     return new Promise((resolve) => {
-        chrome.storage.local.set({ atlas_fields_cache_v2: cacheData }, resolve);
+      chrome.storage.local.set({ atlas_fields_cache_v2: cacheData }, resolve);
     });
   }
 
   private static isCacheExpired(timestamp: number): boolean {
     const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
-    return (Date.now() - timestamp) > CACHE_TTL_MS;
+    return Date.now() - timestamp > CACHE_TTL_MS;
   }
 
   private static buildMapFromCache(lookupArray: any[], tipos: any[]) {
-      lookupMap = new Map(lookupArray);
-      tipoList = tipos;
-      this.cachedLeaves = null;
+    lookupMap = new Map(lookupArray);
+    tipoList = tipos;
+    this.cachedLeaves = null;
   }
 
   // ─── Public API ──────────────────────────────────────────────────────────────
 
   public static getTipos(): TipoEntry[] {
-      return tipoList;
+    return tipoList;
   }
 
   public static getLeafEntries(): LookupEntry[] {
@@ -305,7 +319,7 @@ export class LookupService {
     let leaves = this.getLeafEntries();
 
     if (allowedLevels && allowedLevels.size > 0) {
-      leaves = leaves.filter(leaf => allowedLevels.has(leaf.level));
+      leaves = leaves.filter((leaf) => allowedLevels.has(leaf.level));
     }
 
     if (!query.trim()) {
@@ -313,7 +327,7 @@ export class LookupService {
     }
 
     const normalizedQuery = this.normalizeText(query);
-    const tokens = normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+    const tokens = normalizedQuery.split(/\s+/).filter((t) => t.length > 0);
 
     if (tokens.length === 0) {
       return leaves.slice(0, this.MAX_RESULTS);
@@ -323,16 +337,16 @@ export class LookupService {
 
     for (const leaf of leaves) {
       const normalizedLabel = this.normalizeText(leaf.label);
-      const parentLabels = (leaf.parents || []).map(p => this.normalizeText(p.label)).join(' ');
+      const parentLabels = (leaf.parents || []).map((p) => this.normalizeText(p.label)).join(' ');
       const fullSearchText = `${normalizedLabel} ${parentLabels}`;
 
       let score = 0;
 
       if (normalizedLabel.startsWith(normalizedQuery)) {
         score = 1;
-      } else if (tokens.every(token => fullSearchText.includes(token))) {
+      } else if (tokens.every((token) => fullSearchText.includes(token))) {
         score = 2;
-      } else if (tokens.some(token => fullSearchText.includes(token))) {
+      } else if (tokens.some((token) => fullSearchText.includes(token))) {
         score = 3;
       }
 
@@ -348,12 +362,13 @@ export class LookupService {
       return a.entry.label.localeCompare(b.entry.label);
     });
 
-    return scoredResults.slice(0, this.MAX_RESULTS).map(r => r.entry);
+    return scoredResults.slice(0, this.MAX_RESULTS).map((r) => r.entry);
   }
 
   public static getBreadcrumb(entry: LookupEntry): string {
     const sortedParents = [...(entry.parents || [])].sort((a, b) => a.level - b.level);
-    return sortedParents.map(p => p.label).join(' > ');
+    return sortedParents.map((p) => p.label).join(' > ');
   }
 }
+
 

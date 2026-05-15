@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const, no-console, @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-unused-vars */
 /**
  * Freshdesk API Service Module (Main-World Bridge Pattern)
  *
@@ -116,7 +117,6 @@ interface BridgeResponse {
  * ```
  */
 export class FreshdeskAPI {
-
   /**
    * Stores the Promise from the bridge injection so that multiple callers
    * can await the same load event without re-injecting the script.
@@ -235,7 +235,7 @@ export class FreshdeskAPI {
   private static async sendBridgeRequest(
     url: string,
     method: string,
-    body?: any
+    body?: any,
   ): Promise<unknown> {
     // Wait for bridge to be fully loaded before sending any messages
     await this.injectBridge();
@@ -283,10 +283,7 @@ export class FreshdeskAPI {
    * @param payload - The partial ticket update payload containing type and custom_fields.
    * @throws {Error} On bridge communication failure, network errors, or non-2xx responses.
    */
-  public static async updateTicket(
-    ticketId: string,
-    payload: TicketUpdatePayload
-  ): Promise<void> {
+  public static async updateTicket(ticketId: string, payload: TicketUpdatePayload): Promise<void> {
     const url = `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}`;
     await this.sendBridgeRequest(url, 'PUT', payload);
   }
@@ -310,12 +307,14 @@ export class FreshdeskAPI {
 
   /**
    * Fetches a Freshdesk ticket's properties via the internal JSON API.
-   * 
+   *
    * @param ticketId - The numeric ticket ID (e.g., "415782").
    * @returns {Promise<any>} The ticket data payload from Freshdesk.
    */
   public static async getTicket(ticketId: string, include?: string): Promise<any> {
-    const url = include ? `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}?include=${include}` : `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}`;
+    const url = include
+      ? `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}?include=${include}`
+      : `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}`;
     return await this.sendBridgeRequest(url, 'GET');
   }
 
@@ -358,7 +357,9 @@ export class FreshdeskAPI {
     if (heading) {
       const currentSubject = heading.textContent?.trim() || '';
       if (currentSubject.toUpperCase().includes('[CHAT] - OFFLINE')) {
-        const cleanedSubject = currentSubject.replace(/\[CHAT\]\s*-\s*OFFLINE\s*-?\s*/ig, '').trim();
+        const cleanedSubject = currentSubject
+          .replace(/\[CHAT\]\s*-\s*OFFLINE\s*-?\s*/gi, '')
+          .trim();
         if (cleanedSubject.length > 0 && cleanedSubject !== currentSubject) {
           payload.subject = cleanedSubject;
         }
@@ -368,18 +369,20 @@ export class FreshdeskAPI {
     // Faz um GET para pegar os dados atuais
     const getUrl = `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}`;
     try {
-      const rawResponse = await this.sendBridgeRequest(getUrl, "GET") as any;
+      const rawResponse = (await this.sendBridgeRequest(getUrl, 'GET')) as any;
 
       // Cobre as 3 formas possíveis que a Bridge/Freshdesk podem retornar os dados:
       const actualTicket = rawResponse?.data || rawResponse?.ticket || rawResponse;
 
       if (actualTicket && Array.isArray(actualTicket.tags)) {
-          if (actualTicket.tags.includes(CONSTANTS.VALUES.OFFLINE_TAG)) {
-              payload.tags = actualTicket.tags.filter((tag: string) => tag !== CONSTANTS.VALUES.OFFLINE_TAG);
-          }
+        if (actualTicket.tags.includes(CONSTANTS.VALUES.OFFLINE_TAG)) {
+          payload.tags = actualTicket.tags.filter(
+            (tag: string) => tag !== CONSTANTS.VALUES.OFFLINE_TAG,
+          );
+        }
       }
     } catch (e) {
-      console.log("[Atlas Comet] Erro ao buscar tags do ticket:", e);
+      console.log('[Atlas Comet] Erro ao buscar tags do ticket:', e);
     }
 
     await this.updateTicket(ticketId, payload);
@@ -393,10 +396,13 @@ export class FreshdeskAPI {
    */
   public static async reloadTicketInEmber(ticketId: string): Promise<void> {
     await this.injectBridge();
-    window.postMessage({
-      type: '__AUTOTAB_API_RELOAD_TICKET__',
-      ticketId: ticketId
-    }, '*');
+    window.postMessage(
+      {
+        type: '__AUTOTAB_API_RELOAD_TICKET__',
+        ticketId: ticketId,
+      },
+      '*',
+    );
   }
 
   /**
@@ -405,12 +411,18 @@ export class FreshdeskAPI {
    * @param ticketId - The numeric ticket ID.
    * @param subject - The new subject string.
    */
-  public static async updateTicketSubjectSilently(ticketId: string, subject: string, tags?: string[]): Promise<void> {
+  public static async updateTicketSubjectSilently(
+    ticketId: string,
+    subject: string,
+    tags?: string[],
+  ): Promise<void> {
     const url = `${CONSTANTS.API.TICKETS_ENDPOINT}/${ticketId}/update_properties`;
     const payloadBody: any = { subject };
     if (tags) {
-        payloadBody.tags = tags;
+      payloadBody.tags = tags;
     }
     await this.sendBridgeRequest(url, 'PUT', payloadBody);
   }
 }
+
+

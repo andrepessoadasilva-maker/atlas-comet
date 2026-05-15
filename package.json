@@ -6,7 +6,9 @@
     "prebuild": "node bump-version.js",
     "build": "esbuild src/content.ts --bundle --outfile=dist/content.js && esbuild src/background.ts --bundle --outfile=dist/background.js",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts"
+    "format": "prettier --write src/**/*.ts",
+    "prepare": "husky",
+    "type-check": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
@@ -14,6 +16,7 @@
     "@typescript-eslint/parser": "^7.10.0",
     "esbuild": "^0.28.0",
     "eslint": "^8.57.0",
+    "husky": "^9.1.7",
     "prettier": "^3.2.5",
     "typescript": "^5.4.5"
   }

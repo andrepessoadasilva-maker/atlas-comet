@@ -164,3 +164,13 @@ function createSecureModal(ticketId: string): void {
 - When updating or maintaining the codebase, developers must ensure that any sections or functions missing documentation are immediately retrofitted with comments that adhere to this standard. This helps maintain clarity in the dynamic and sometimes complex Ember.js environment.
 
 **Version Management:** After every new feature is implemented, you MUST update the extension version in the `manifest.json` and any other relevant files. This ensures tracking of feature rollouts and provides agents with the latest updates smoothly.
+
+## 8. Workflow and Quality Assurance (MANDATORY)
+
+**Mandatory Commit & Push Policy:**
+- Developers **MUST** perform a `git commit` and `git push` immediately after every coding session or significant feature implementation.
+- This ensures work is never lost and remains synchronized with the remote repository.
+
+**Pre-Commit Validation:**
+- It is **COMPULSORY** to correct all linting errors (`npm run lint`) and TypeScript type errors (`npm run type-check`) before attempting a commit.
+- The Husky "guard dog" is configured to block commits that do not pass these validations. Do not bypass these checks; fix the code instead.

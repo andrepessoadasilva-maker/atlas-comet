@@ -1,0 +1,13 @@
+{
+  "opcoes_nivel_3": [
+    {
+      "termo_de_busca": "Leads - Administrar", 
+      "preenchimento_automatico": {
+        "tipo": "Dúvida de Cliente",
+        "nivel1": "Time Suporte",
+        "nivel2": "Leads",
+        "nivel3": "Leads - Administrar"
+      }
+    }
+  ]
+}

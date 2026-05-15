@@ -1,0 +1,20 @@
+{
+  "name": "atlas-comet",
+  "version": "1.2.180",
+  "description": "Atlas Comet: Tickets na rota certa. Automação e precisão para a tabulação de tickets no Freshdesk.",
+  "scripts": {
+    "prebuild": "node bump-version.js",
+    "build": "esbuild src/content.ts --bundle --outfile=dist/content.js && esbuild src/background.ts --bundle --outfile=dist/background.js",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@typescript-eslint/eslint-plugin": "^7.10.0",
+    "@typescript-eslint/parser": "^7.10.0",
+    "esbuild": "^0.28.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.5"
+  }
+}

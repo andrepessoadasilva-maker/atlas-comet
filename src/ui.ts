@@ -197,19 +197,10 @@ export class UIFactory {
 
     const overlay = document.createElement('div');
     overlay.id = CONSTANTS.MODAL_ID;
-    overlay.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.6); z-index: 99999;
-        display: flex; justify-content: center; align-items: center;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    `;
+    overlay.className = 'atlas-modal-overlay';
 
     const modalBody = document.createElement('div');
-    modalBody.style.cssText = `
-        background: #fbfbf9; padding: 30px; border-radius: 10px; text-align: center;
-        max-width: 450px; border: 1px solid rgba(45, 121, 102, 0.1);
-        box-shadow: 0 8px 32px rgba(39, 103, 92, 0.08);
-    `;
+    modalBody.className = 'atlas-modal-body';
 
     // Close modal when clicking outside of modalBody
     overlay.addEventListener('mousedown', (event) => {
@@ -244,12 +235,7 @@ export class UIFactory {
     }
 
     // Widen the modal to accommodate the search results list
-    modalBody.style.cssText = `
-      background: #fbfbf9; padding: 24px; border-radius: 10px; text-align: left;
-      max-width: 560px; width: 90vw; border: 1px solid rgba(45, 121, 102, 0.1);
-      box-shadow: 0 8px 32px rgba(39, 103, 92, 0.08);
-      max-height: 80vh; display: flex; flex-direction: column;
-    `;
+    modalBody.className = 'atlas-modal-body atlas-modal-body-search';
 
     // ─── Title ─────────────────────────────────────────────────────────────────
     const title = document.createElement('h2');
@@ -323,14 +309,8 @@ export class UIFactory {
     `;
 
     const tipoResultsContainer = document.createElement('ul');
-    tipoResultsContainer.style.cssText = `
-      list-style: none; padding: 0; margin: 0;
-      position: absolute; top: calc(100% + 4px); left: 0; width: 100%;
-      background: white; z-index: 100;
-      overflow-y: auto; max-height: 150px;
-      border: 1px solid #ddd; border-radius: 6px;
-      display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    `;
+    tipoResultsContainer.className = 'atlas-tipo-results';
+    tipoResultsContainer.style.display = 'none'; // Keep dynamic state as inline
 
     tipoWrapper.appendChild(tipoInput);
     tipoWrapper.appendChild(tipoResultsContainer);
@@ -585,11 +565,7 @@ export class UIFactory {
 
     // ─── Results Container ─────────────────────────────────────────────────────
     const resultsContainer = document.createElement('ul');
-    resultsContainer.style.cssText = `
-      list-style: none; padding: 0; margin: 12px 0 0 0;
-      overflow-y: auto; flex: 1; max-height: 50vh;
-      border: 1px solid #eee; border-radius: 6px;
-    `;
+    resultsContainer.className = 'atlas-results-container';
 
     // ─── Cancel Button ─────────────────────────────────────────────────────────
     const btnCancel = document.createElement('button');

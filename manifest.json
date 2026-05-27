@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Atlas Comet",
-  "version": "1.2.189",
-  "description": "Atlas Comet: Tickets na rota certa. Automação e precisão para a tabulação de tickets no Freshdesk.",
+  "name": "Atlas Comet: Tickets na Rota Certa no Freshdesk",
+  "version": "1.2.190",
+  "description": "Automação avançada e tratamento de dados para otimizar e acelerar o fluxo de atendimento no Freshdesk.",
   "permissions": [
     "webNavigation",
-    "storage",
-    "scripting"
+    "storage"
   ],
   "icons": {
     "16": "assets/icons/icon16.png",

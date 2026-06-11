@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Atlas Comet: Tickets na Rota Certa no Freshdesk",
-  "version": "1.2.190",
+  "version": "1.2.193",
   "description": "Automação avançada e tratamento de dados para otimizar e acelerar o fluxo de atendimento no Freshdesk.",
   "permissions": [
     "webNavigation",
@@ -17,7 +17,9 @@
   },
   "host_permissions": [
     "https://*.freshdesk.com/*",
-    "https://*.myfreshworks.com/*"
+    "https://*.myfreshworks.com/*",
+    "https://ajuda.cvcrm.com.br/*",
+    "https://ajuda.anapro.com.br/*"
   ],
   "background": {
     "service_worker": "dist/background.js",
@@ -27,7 +29,9 @@
     {
       "matches": [
         "https://*.freshdesk.com/*",
-        "https://*.myfreshworks.com/*"
+        "https://*.myfreshworks.com/*",
+        "https://ajuda.cvcrm.com.br/*",
+        "https://ajuda.anapro.com.br/*"
       ],
       "all_frames": true,
       "js": [
@@ -47,7 +51,9 @@
         "assets/icons/cometa.gif"
       ],
       "matches": [
-        "https://*.freshdesk.com/*"
+        "https://*.freshdesk.com/*",
+        "https://ajuda.cvcrm.com.br/*",
+        "https://ajuda.anapro.com.br/*"
       ]
     }
   ]

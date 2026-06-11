@@ -1083,7 +1083,13 @@ export class UIFactory {
           console.log('[Atlas Comet] Erro ao buscar tags atuais', e);
         }
 
-        // PASSO 1: Capturar visualmente e extrair IDs do Shadow DOM
+        // PASSO 1: Capturar visualmente e extrair IDs do DOM
+        // Estratégia em camadas: tenta Shadow DOM primeiro (layout antigo), depois
+        // busca no documento principal usando seletores baseados em href (layout novo).
+        // O seletor `a[href*="/a/contacts/"]` é extremamente estável porque depende
+        // da rota da aplicação, não de classes CSS genéricas que o Freshdesk muda.
+
+        // --- Camada 1: Shadow DOM (layout legado) ---
         const mfeApp = document.querySelector(
           'mfe-application[app-id="fw-unified-mfe--contact-info"]',
         ) as HTMLElement & { shadowRoot: ShadowRoot };
@@ -1112,6 +1118,59 @@ export class UIFactory {
                 .getAttribute('aria-label')
                 ?.match(/(?:Go to|Ir para)\s+(.+)/i);
               if (ariaMatch && ariaMatch[1]) rawCompany = ariaMatch[1].trim();
+            }
+          }
+        }
+
+        // --- Camada 2: Documento principal (layout novo do Freshdesk - Junho/2026) ---
+        // O Freshdesk moveu os links de contato e empresa para FORA do Shadow DOM.
+        // Usamos seletores baseados na rota do href (/a/contacts/ e /a/companies/)
+        // que são muito mais resistentes a mudanças visuais do que classes CSS.
+        if (rawClient === 'Cliente Indefinido' || !contactId) {
+          const clientElMain = document.querySelector<HTMLAnchorElement>('a[href*="/a/contacts/"]');
+          if (clientElMain) {
+            const nameText = clientElMain.textContent?.trim();
+            if (nameText && rawClient === 'Cliente Indefinido') {
+              rawClient = nameText;
+            }
+            if (!contactId) {
+              const matchId = clientElMain.href.match(/\/contacts\/(\d+)/);
+              if (matchId) contactId = matchId[1];
+            }
+          }
+        }
+
+        if (rawCompany === 'Empresa Indefinida' || !companyId) {
+          const companyElMain = document.querySelector<HTMLAnchorElement>('a[href*="/a/companies/"]');
+          if (companyElMain) {
+            const companyText = companyElMain.textContent?.trim();
+            if (companyText && rawCompany === 'Empresa Indefinida') {
+              rawCompany = companyText;
+            }
+            if (!companyId) {
+              const matchId = companyElMain.href.match(/\/companies\/(\d+)/);
+              if (matchId) companyId = matchId[1];
+            }
+          }
+        }
+
+        // --- Camada 3: Ember dropdown trigger (estrutura do user-link) ---
+        // Algumas telas do Freshdesk renderizam o nome do contato dentro de um
+        // `<a data-test-id="user-name">` envolto por um div `data-test-id="user-link"`.
+        // O nome fica dentro de um <b> tag. O href contém a rota /a/contacts/{id}.
+        // Esse seletor é estável porque usa data-test-id (atributo de teste do Ember).
+        if (rawClient === 'Cliente Indefinido' || !contactId) {
+          const userNameEl = document.querySelector<HTMLAnchorElement>(
+            'a[data-test-id="user-name"][href*="/contacts/"]',
+          );
+          if (userNameEl) {
+            const nameText = userNameEl.textContent?.trim();
+            if (nameText && rawClient === 'Cliente Indefinido') {
+              rawClient = nameText;
+            }
+            if (!contactId) {
+              const matchId = userNameEl.href.match(/\/contacts\/(\d+)/);
+              if (matchId) contactId = matchId[1];
             }
           }
         }

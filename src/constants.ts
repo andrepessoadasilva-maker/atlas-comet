@@ -57,7 +57,16 @@ export const CONSTANTS = {
   // URL Patterns
   URL: {
     TICKETS_PATH: '/a/tickets/',
-    FRESHDESK_HOST_SUFFIX: 'freshdesk.com',
+    /**
+     * List of host suffixes where the extension is active.
+     * Used by the background script's webNavigation filter to detect SPA transitions.
+     * Each entry matches the domain and all its subdomains.
+     */
+    ALLOWED_HOST_SUFFIXES: [
+      'freshdesk.com',
+      'ajuda.cvcrm.com.br',
+      'ajuda.anapro.com.br',
+    ] as readonly string[],
   },
 };
 

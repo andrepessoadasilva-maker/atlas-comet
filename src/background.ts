@@ -25,8 +25,10 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(
       });
   },
   {
-    // Filter to only trigger on URLs ending with freshdesk.com to save performance.
-    url: [{ hostSuffix: CONSTANTS.URL.FRESHDESK_HOST_SUFFIX }],
+    // Filter to only trigger on URLs matching our supported Freshdesk domains.
+    // Each host suffix is mapped to a separate URLFilter entry, so the listener
+    // fires for any of the configured domains (freshdesk.com, ajuda.cvcrm.com.br, etc.)
+    url: CONSTANTS.URL.ALLOWED_HOST_SUFFIXES.map((suffix) => ({ hostSuffix: suffix })),
   },
 );
 

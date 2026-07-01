@@ -46,6 +46,15 @@ export const CONSTANTS = {
     BTN_UPDATE_TEXT: 'Atualizar',
     /** Default ticket type sent with API updates. Will be replaced with a UI input later. */
     DEFAULT_TICKET_TYPE: 'Dúvida de Cliente',
+    /**
+     * Keywords in the ticket subject that indicate a chat/conversation origin.
+     * When detected (case-insensitive), the extension auto-renames the subject
+     * using the existing tabulation (Tipo, N1, N2, N3) without user intervention.
+     * Chat Offline tickets are explicitly excluded from this behavior.
+     */
+    CHAT_SUBJECT_KEYWORDS: ['CONVERSA', 'CHAT'] as readonly string[],
+    /** CSS selector for the ticket subject heading element in Freshdesk's DOM */
+    SUBJECT_HEADING_SELECTOR: '.ticket-subject-heading',
   },
 
   // Freshdesk Internal API Endpoints

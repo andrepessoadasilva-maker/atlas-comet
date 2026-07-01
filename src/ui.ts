@@ -1625,6 +1625,281 @@ export class UIFactory {
       console.log('[Atlas Comet] Timeout waiting for tag dropdown option.');
     }, 10000);
   }
+  // ─── Chat Auto-Rename: Identity Resolution Helper ────────────────────────
+
+  /**
+   * Resolves the company name, client name, and current tags for a given ticket.
+   *
+   * Strategy (layered fallbacks):
+   * 1. API V2 with `?include=company` — gets tags + company name in one request
+   * 2. Shadow DOM (legacy Freshdesk layout) — scrapes contact/company links
+   * 3. Main DOM (new Freshdesk layout June/2026) — href-based selectors
+   * 4. Ember data-test-id selectors — user-name anchor tag
+   * 5. API V2 contacts/companies — full name lookup by ID
+   * 6. Team Inbox iframe scraping (Plano C) — last resort for company name
+   *
+   * @param ticketId - The numeric ticket ID.
+   * @returns Object with { company, client, tags } fully resolved.
+   */
+  private static async resolveTicketIdentities(
+    ticketId: string,
+  ): Promise<{ company: string; client: string; tags: string[] }> {
+    let rawCompany = 'Empresa Indefinida';
+    let rawClient = 'Cliente Indefinido';
+    let contactId: string | null = null;
+    let companyId: string | null = null;
+    let currentTags: string[] = [];
+
+    // ─── Layer 1: API V2 (tags + company enrichment) ──────────────────────
+    try {
+      const tRes = await fetch(`/api/v2/tickets/${ticketId}?include=company`);
+      if (tRes.ok) {
+        const tData = await tRes.json();
+        currentTags = tData.tags || [];
+        if (tData.company && tData.company.name) {
+          rawCompany = tData.company.name;
+        }
+      }
+    } catch (e) {
+      console.log('[Atlas Comet] Erro ao buscar tags atuais', e);
+    }
+
+    // ─── Layer 2: Shadow DOM (legacy layout) ──────────────────────────────
+    const mfeApp = document.querySelector(
+      'mfe-application[app-id="fw-unified-mfe--contact-info"]',
+    ) as HTMLElement & { shadowRoot: ShadowRoot };
+    if (mfeApp && mfeApp.shadowRoot) {
+      const shadowRoot = mfeApp.shadowRoot;
+      const clientEl = shadowRoot.querySelector('a[href*="/contacts/"]');
+      if (clientEl) {
+        rawClient = clientEl.textContent?.trim() || rawClient;
+        const matchId = (clientEl as HTMLAnchorElement).href.match(/\/contacts\/(\d+)/);
+        if (matchId) contactId = matchId[1];
+      }
+      const companyEl = shadowRoot.querySelector('a[href*="/companies/"]');
+      if (companyEl) {
+        rawCompany = companyEl.textContent?.trim() || rawCompany;
+        const matchId = (companyEl as HTMLAnchorElement).href.match(/\/companies\/(\d+)/);
+        if (matchId) companyId = matchId[1];
+      } else {
+        const anyComp = shadowRoot.querySelector(
+          'a[aria-label*="Go to"], a[aria-label*="Ir para"]',
+        );
+        if (anyComp) {
+          const ariaMatch = anyComp
+            .getAttribute('aria-label')
+            ?.match(/(?:Go to|Ir para)\s+(.+)/i);
+          if (ariaMatch && ariaMatch[1]) rawCompany = ariaMatch[1].trim();
+        }
+      }
+    }
+
+    // ─── Layer 3: Main DOM (new Freshdesk layout — June/2026) ─────────────
+    if (rawClient === 'Cliente Indefinido' || !contactId) {
+      const clientElMain = document.querySelector<HTMLAnchorElement>('a[href*="/a/contacts/"]');
+      if (clientElMain) {
+        const nameText = clientElMain.textContent?.trim();
+        if (nameText && rawClient === 'Cliente Indefinido') rawClient = nameText;
+        if (!contactId) {
+          const matchId = clientElMain.href.match(/\/contacts\/(\d+)/);
+          if (matchId) contactId = matchId[1];
+        }
+      }
+    }
+    if (rawCompany === 'Empresa Indefinida' || !companyId) {
+      const companyElMain = document.querySelector<HTMLAnchorElement>('a[href*="/a/companies/"]');
+      if (companyElMain) {
+        const companyText = companyElMain.textContent?.trim();
+        if (companyText && rawCompany === 'Empresa Indefinida') rawCompany = companyText;
+        if (!companyId) {
+          const matchId = companyElMain.href.match(/\/companies\/(\d+)/);
+          if (matchId) companyId = matchId[1];
+        }
+      }
+    }
+
+    // ─── Layer 4: Ember user-name data-test-id selector ───────────────────
+    if (rawClient === 'Cliente Indefinido' || !contactId) {
+      const userNameEl = document.querySelector<HTMLAnchorElement>(
+        'a[data-test-id="user-name"][href*="/contacts/"]',
+      );
+      if (userNameEl) {
+        const nameText = userNameEl.textContent?.trim();
+        if (nameText && rawClient === 'Cliente Indefinido') rawClient = nameText;
+        if (!contactId) {
+          const matchId = userNameEl.href.match(/\/contacts\/(\d+)/);
+          if (matchId) contactId = matchId[1];
+        }
+      }
+    }
+
+    // ─── Layer 5: API V2 full contact/company lookup by ID ────────────────
+    if (contactId) {
+      try {
+        const cRes = await fetch(`/api/v2/contacts/${contactId}`);
+        if (cRes.ok) {
+          const cData = (await cRes.json()) as Record<string, unknown>;
+          if (cData && cData.name) rawClient = cData.name as string;
+        }
+      } catch (e) {
+        Logger.info('[Atlas Comet] Erro no Plano A do Cliente API (auto-rename)', e);
+      }
+    }
+    if (companyId) {
+      try {
+        const cmpRes = await fetch(`/api/v2/companies/${companyId}`);
+        if (cmpRes.ok) {
+          const cmpData = (await cmpRes.json()) as Record<string, unknown>;
+          if (cmpData && cmpData.name) rawCompany = cmpData.name as string;
+        }
+      } catch (e) {
+        Logger.info('[Atlas Comet] Erro no Plano A da Empresa API (auto-rename)', e);
+      }
+    }
+
+    // ─── Email fallback for client name ───────────────────────────────────
+    if (rawClient.includes('@')) {
+      const fallbackEl = document.querySelector(
+        'div[style*="margin-left: 33px"][style*="color: #6f7071"]',
+      );
+      if (fallbackEl && fallbackEl.textContent) {
+        const fallbackName = fallbackEl.textContent.trim();
+        if (fallbackName && !fallbackName.includes('@')) rawClient = fallbackName;
+      }
+    }
+
+    // ─── Agência/Finder interceptor ───────────────────────────────────────
+    if (rawCompany && rawCompany.toLowerCase().includes('agência/finder')) {
+      rawCompany = 'Empresa Indefinida';
+    }
+
+    // ─── Layer 6: Team Inbox iframe scraping (Plano C) ────────────────────
+    if (rawCompany === 'Empresa Indefinida') {
+      const teamInboxBtn = document.querySelector('a[href*="/crm/messaging/"]');
+      if (teamInboxBtn) {
+        try {
+          const scrapeResponse = await new Promise<{
+            success: boolean;
+            companyName?: string;
+            error?: string;
+          }>((resolve) => {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = (teamInboxBtn as HTMLAnchorElement).href;
+
+            // eslint-disable-next-line prefer-const
+            let timeout: ReturnType<typeof setTimeout> | undefined;
+            const messageHandler = (event: MessageEvent) => {
+              if (event.data && event.data.type === 'ATLAS_COMET_TEAM_INBOX_RESULT') {
+                window.removeEventListener('message', messageHandler);
+                if (timeout) clearTimeout(timeout);
+                iframe.remove();
+                resolve({ success: true, companyName: event.data.companyName });
+              }
+            };
+            window.addEventListener('message', messageHandler);
+            timeout = setTimeout(() => {
+              window.removeEventListener('message', messageHandler);
+              iframe.remove();
+              resolve({ success: false, error: 'Timeout ao extrair do Iframe' });
+            }, 15000);
+            document.body.appendChild(iframe);
+          });
+          if (scrapeResponse && scrapeResponse.success && scrapeResponse.companyName) {
+            rawCompany = scrapeResponse.companyName;
+          } else {
+            console.log(
+              '[Atlas Comet] Plano C (auto-rename): Scraping do Team Inbox falhou',
+              scrapeResponse?.error,
+            );
+          }
+        } catch (e) {
+          console.log('[Atlas Comet] Erro no Plano C (Team Inbox auto-rename)', e);
+        }
+      }
+    }
+
+    // ─── Final formatting ─────────────────────────────────────────────────
+    const company = this.formatProperName(rawCompany, false);
+    const client = this.formatProperName(rawClient, true);
+
+    return { company, client, tags: currentTags };
+  }
+
+  // ─── Chat Auto-Rename: Public Entry Point ───────────────────────────────
+
+  /**
+   * Automatically renames the subject of a chat/conversa ticket using the
+   * existing tabulation (Tipo, N1, N2, N3) already present in the ticket.
+   *
+   * This method runs silently — no modal, no toast, no user interaction.
+   * It is triggered by the observer when a ticket is opened and its title
+   * contains "CONVERSA" or "CHAT" (case-insensitive), AND the ticket is
+   * NOT a Chat Offline.
+   *
+   * The new subject follows the same format as the manual flow:
+   *   `Empresa - Cliente - [N3 ou N2]`
+   *
+   * @param ticketId - The numeric ticket ID.
+   * @param tipo - The current "Tipo" value from the DOM.
+   * @param n1 - Serviço Nível 1 value from the DOM.
+   * @param n2 - Serviço Nível 2 value from the DOM.
+   * @param n3 - Serviço Nível 3 value from the DOM (may be empty).
+   */
+  public static async autoRenameChatSubject(
+    ticketId: string,
+    tipo: string,
+    n1: string,
+    n2: string,
+    n3: string,
+  ): Promise<void> {
+    console.log(
+      `[Atlas Comet] Auto-rename iniciado para ticket ${ticketId} (Tipo: ${tipo}, N1: ${n1}, N2: ${n2}, N3: ${n3})`,
+    );
+
+    try {
+      // Resolve company and client names via multi-layer scraping strategy
+      const { company, client, tags } = await this.resolveTicketIdentities(ticketId);
+
+      // Build the new subject using the same formula as the manual flow
+      const servicoFinal = n3 || n2;
+      const newSubject = `${company} - ${client} - ${servicoFinal}`;
+
+      // Smart tag logic: remove control tags and re-add only if needed
+      const finalTags = tags.filter(
+        (tag) => tag !== 'pendente_nome_empresa_cliente' && tag !== CONSTANTS.VALUES.OFFLINE_TAG,
+      );
+      if (company === 'Indefinido' || client === 'Indefinido') {
+        finalTags.push('pendente_nome_empresa_cliente');
+      }
+
+      // Update subject silently via API (no service level changes)
+      await FreshdeskAPI.updateTicketSubjectSilently(ticketId, newSubject, finalTags);
+
+      // Update the DOM visually for instant feedback (same pattern as manual flow)
+      const subjectDisplay = document.querySelector(CONSTANTS.VALUES.SUBJECT_HEADING_SELECTOR);
+      if (subjectDisplay) {
+        let textNodeUpdated = false;
+        Array.from(subjectDisplay.childNodes).forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
+            node.textContent = newSubject + ' ';
+            textNodeUpdated = true;
+          }
+        });
+        // Fallback: update first child if no text node was found
+        if (!textNodeUpdated && subjectDisplay.firstChild) {
+          subjectDisplay.firstChild.textContent = newSubject + ' ';
+        }
+      }
+
+      // Force Freshdesk to sync the UI by reloading the Ember Model
+      await FreshdeskAPI.reloadTicketInEmber(ticketId);
+
+      console.log(`[Atlas Comet] Auto-rename concluído: "${newSubject}"`);
+    } catch (error) {
+      console.error('[Atlas Comet] Erro no auto-rename do título do chat:', error);
+    }
+  }
 }
 
 // ─── SENTINELA DE URL (SPA WATCHER) ───────────────────────────────────────

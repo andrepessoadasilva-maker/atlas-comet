@@ -183,6 +183,8 @@ export class TicketObserver {
     const isChatTicket = CONSTANTS.VALUES.CHAT_SUBJECT_KEYWORDS.some((keyword) =>
       upperSubject.includes(keyword),
     );
+    
+    // We only log if it IS a chat ticket, so we don't spam for non-chat tickets.
     if (!isChatTicket) return;
 
     // Step 3: Read the current tabulation values from the DOM
@@ -191,16 +193,26 @@ export class TicketObserver {
     const n2 = this.readFieldValue(CONSTANTS.VALUES.NIVEL_2_TITLE);
     const n3 = this.readFieldValue(CONSTANTS.VALUES.NIVEL_3_TITLE);
 
-    // Step 4: Validate minimum required fields (N2 must be populated)
-    // Same logic as the manual flow: servicoFinal = n3 || n2
-    if (!n2) return; // Fields not yet rendered by Ember — wait for next mutation
+    // Step 4: Validate minimum required fields (Tipo, N1, and N2 must be populated)
+    // We strictly wait for ALL essential fields to render to avoid race conditions 
+    // where the Offline tag might be loading in a field we haven't read yet.
+    if (!tipo || !n1 || !n2) {
+      console.log(`[Atlas Comet Observer] Ticket "${subjectText}" é um Chat, mas a tabulação (Tipo, N1, N2) ainda está carregando. Aguardando...`);
+      return; 
+    }
+
+    // Step 4.5: Double check offline status strictly from the loaded values 
+    // to absolutely guarantee we do not touch offline tickets.
+    if (tipo === CONSTANTS.VALUES.CHAT_OFFLINE || n2 === CONSTANTS.VALUES.CHAT_OFFLINE || n3 === CONSTANTS.VALUES.CHAT_OFFLINE) {
+      console.log(`[Atlas Comet Observer] Ticket "${subjectText}" foi identificado como Chat Offline após o carregamento da tabulação. Abortando auto-rename.`);
+      return;
+    }
 
     // Step 5: Mark as triggered IMMEDIATELY to prevent duplicate calls
-    // (async operation below could overlap with the next MutationObserver callback)
     this.autoRenameTriggered = true;
 
     console.log(
-      `[Atlas Comet] Chat/Conversa detectado no título: "${subjectText}". Iniciando auto-rename...`,
+      `[Atlas Comet] Chat/Conversa detectado no título: "${subjectText}". Tabulação pronta (Tipo: ${tipo}, N1: ${n1}, N2: ${n2}). Iniciando auto-rename...`,
     );
 
     // Step 6: Fire the auto-rename asynchronously (no await — observer must return fast)

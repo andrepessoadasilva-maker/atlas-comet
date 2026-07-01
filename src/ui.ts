@@ -2010,7 +2010,12 @@ export class UIFactory {
 
       // Clone ALL custom_fields (N1, N2, N3, Justificativa, etc.)
       if (ticketData.custom_fields && typeof ticketData.custom_fields === 'object') {
-        clonePayload.custom_fields = { ...ticketData.custom_fields };
+        clonePayload.custom_fields = {};
+        for (const [key, value] of Object.entries(ticketData.custom_fields)) {
+          if (value !== null) {
+            clonePayload.custom_fields[key] = value;
+          }
+        }
       }
 
       console.log('[Atlas Comet] Clone payload:', JSON.stringify(clonePayload, null, 2));

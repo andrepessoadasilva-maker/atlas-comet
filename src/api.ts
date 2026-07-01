@@ -426,6 +426,28 @@ export class FreshdeskAPI {
     }
     await this.sendBridgeRequest(url, 'PUT', payloadBody);
   }
+
+  /**
+   * Creates a new ticket via Freshdesk's internal JSON API.
+   *
+   * Purpose:
+   * Used by the Clone Ticket feature to create a duplicate ticket with the same
+   * metadata (subject, type, status, priority, tags, group, agent, product,
+   * custom_fields, and requester_id) as the source ticket.
+   *
+   * The bridge handles CSRF token injection and cookie attachment automatically.
+   *
+   * @param payload - The full ticket creation payload. Must include at minimum:
+   *   - subject (string)
+   *   - description (string)
+   *   - requester_id (number)
+   * @returns The created ticket object from Freshdesk (contains the new ticket's `id`).
+   * @throws {Error} On bridge communication failure, network errors, or validation errors.
+   */
+  public static async createTicket(payload: Record<string, unknown>): Promise<unknown> {
+    const url = CONSTANTS.API.TICKETS_ENDPOINT;
+    return await this.sendBridgeRequest(url, 'POST', payload);
+  }
 }
 
 

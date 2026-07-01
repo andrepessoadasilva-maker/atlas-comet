@@ -155,7 +155,7 @@
 
     try {
       var parsedUrl = new URL(url, window.location.origin);
-      if (!parsedUrl.pathname.match(/^(\/api\/_\/tickets\/\d+(\/update_properties)?|\/api\/(v2|_)\/ticket_fields)$/)) {
+      if (!parsedUrl.pathname.match(/^(\/api\/_\/tickets(\/\d+(\/update_properties)?)?|\/api\/(v2|_)\/ticket_fields)$/)) {
         console.error('[Atlas Comet Bridge] ❌ Unauthorized API endpoint requested:', url);
         return;
       }

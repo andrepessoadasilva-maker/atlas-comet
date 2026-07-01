@@ -86,6 +86,32 @@ export class UIFactory {
         }
       };
       container.appendChild(btnSearch);
+
+      // 1b. "Clonar Ticket" Button (Created once alongside Definir Serviço)
+      const btnClone = document.createElement('button');
+      btnClone.id = 'atlas-comet-clone-ticket';
+      btnClone.style.cssText =
+        baseBtnStyle +
+        ' background: #29735c !important; color: #fbfbf9 !important; border: 1px solid rgba(45, 121, 102, 0.1) !important; border-bottom: 2px solid #02ac85 !important; box-shadow: 0 1px 3px rgba(39, 103, 92, 0.1) !important; gap: 5px !important;';
+
+      // Clone icon — two overlapping documents SVG
+      const cloneIcon = document.createElement('span');
+      cloneIcon.style.cssText = 'display: inline-flex; align-items: center; flex-shrink: 0;';
+      cloneIcon.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+      btnClone.appendChild(cloneIcon);
+      btnClone.appendChild(document.createTextNode('Clonar Ticket'));
+
+      btnClone.addEventListener('mouseenter', () => {
+        btnClone.style.opacity = '0.85';
+      });
+      btnClone.addEventListener('mouseleave', () => {
+        btnClone.style.opacity = '1';
+      });
+      btnClone.onclick = () => {
+        this.cloneTicket(ticketId);
+      };
+      container.appendChild(btnClone);
     }
 
     // 2. Manage "Sim, Offline" Button (In-place update)
@@ -1898,6 +1924,182 @@ export class UIFactory {
       console.log(`[Atlas Comet] Auto-rename concluído: "${newSubject}"`);
     } catch (error) {
       console.error('[Atlas Comet] Erro no auto-rename do título do chat:', error);
+    }
+  }
+
+  // ─── Clone Ticket Feature ───────────────────────────────────────────────
+
+  /**
+   * Clones the current ticket by reading all its fields via the V2 API
+   * and creating a new ticket with the same metadata via the internal API bridge.
+   *
+   * Cloned fields:
+   * - subject, type, status, priority, tags
+   * - group_id, responder_id, product_id, requester_id
+   * - All custom_fields (N1, N2, N3, Justificativa|Pendente, etc.)
+   *
+   * The new ticket's description is set to "Ticket clonado de #XXXXX".
+   * After creation, the browser navigates to the new ticket.
+   *
+   * @param ticketId - The numeric ID of the ticket to clone.
+   */
+  private static async cloneTicket(ticketId: string): Promise<void> {
+    // ─── Show Loading Toast ───────────────────────────────────────────────
+    const overlay = document.createElement('div');
+    overlay.id = 'atlas-comet-clone-overlay';
+    overlay.className = 'atlas-modal-overlay';
+
+    const modalBody = document.createElement('div');
+    modalBody.className = 'atlas-modal-body';
+    modalBody.style.cssText += 'min-width: 360px; max-width: 420px;';
+
+    const toastContainer = document.createElement('div');
+    toastContainer.className = 'atlas-toast-container';
+    toastContainer.style.cssText = 'animation: atlas-comet-fade-in 0.3s ease-out forwards;';
+
+    // Lottie loader (Premium Experience)
+    const cometLoader = document.createElement('div');
+    cometLoader.id = 'atlas-clone-lottie-loader';
+    cometLoader.style.cssText = 'width: 200px; height: 200px; margin: 0 auto; display: block;';
+
+    const loadingText = document.createElement('p');
+    loadingText.style.cssText =
+      'color: #29735c; font-size: 15px; font-weight: 500; margin: 0; position: relative; z-index: 10;';
+    loadingText.textContent = 'Clonando ticket...';
+
+    toastContainer.appendChild(cometLoader);
+    toastContainer.appendChild(loadingText);
+    modalBody.appendChild(toastContainer);
+    overlay.appendChild(modalBody);
+    document.body.appendChild(overlay);
+
+    // Initialize Lottie animation
+    lottie.loadAnimation({
+      container: cometLoader,
+      renderer: 'svg',
+      loop: true,
+      autoplay: true,
+      animationData: loaderJson,
+    });
+
+    try {
+      // ─── Step 1: Read all ticket data via V2 API ──────────────────────
+      const response = await fetch(`/api/v2/tickets/${ticketId}?include=company`);
+      if (!response.ok) {
+        throw new Error(`Erro ao ler ticket: HTTP ${response.status}`);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ticketData = (await response.json()) as Record<string, any>;
+
+      // ─── Step 2: Build the clone payload ──────────────────────────────
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const clonePayload: Record<string, any> = {
+        subject: ticketData.subject || 'Ticket Clonado',
+        description: `Ticket clonado de <a href="/a/tickets/${ticketId}">#${ticketId}</a>`,
+        requester_id: ticketData.requester_id,
+        type: ticketData.type || null,
+        status: ticketData.status || 2, // Default: Open
+        priority: ticketData.priority || 1, // Default: Low
+        tags: ticketData.tags || [],
+      };
+
+      // Only include optional ID fields if they exist (avoid sending null IDs)
+      if (ticketData.group_id) clonePayload.group_id = ticketData.group_id;
+      if (ticketData.responder_id) clonePayload.responder_id = ticketData.responder_id;
+      if (ticketData.product_id) clonePayload.product_id = ticketData.product_id;
+
+      // Clone ALL custom_fields (N1, N2, N3, Justificativa, etc.)
+      if (ticketData.custom_fields && typeof ticketData.custom_fields === 'object') {
+        clonePayload.custom_fields = { ...ticketData.custom_fields };
+      }
+
+      console.log('[Atlas Comet] Clone payload:', JSON.stringify(clonePayload, null, 2));
+
+      // ─── Step 3: Create the new ticket via Bridge ─────────────────────
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const createResult = (await FreshdeskAPI.createTicket(clonePayload)) as any;
+
+      // The internal API may wrap the response in different ways
+      const newTicket = createResult?.ticket || createResult?.data || createResult;
+      const newTicketId = newTicket?.id || newTicket?.display_id;
+
+      if (!newTicketId) {
+        throw new Error('A API não retornou o ID do novo ticket.');
+      }
+
+      // ─── Step 4: Success Toast ────────────────────────────────────────
+      while (modalBody.firstChild) modalBody.removeChild(modalBody.firstChild);
+
+      const successContainer = document.createElement('div');
+      successContainer.style.cssText = `
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 40px 30px; text-align: center;
+        animation: atlas-comet-crossfade 0.3s ease-out forwards;
+      `;
+
+      const checkIcon = document.createElement('div');
+      checkIcon.style.cssText =
+        'width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; color: #02ac85;';
+      checkIcon.innerHTML = `
+        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="8 12 11 15 16 9"/>
+        </svg>
+      `;
+
+      const successText = document.createElement('p');
+      successText.style.cssText =
+        'color: #29735c; font-size: 15px; font-weight: 500; margin: 0;';
+      successText.textContent = `Ticket #${newTicketId} criado! Abrindo...`;
+
+      successContainer.appendChild(checkIcon);
+      successContainer.appendChild(successText);
+      modalBody.appendChild(successContainer);
+
+      // ─── Step 5: Navigate to the new ticket ───────────────────────────
+      setTimeout(() => {
+        window.location.href = `/a/tickets/${newTicketId}`;
+      }, 1200);
+    } catch (error) {
+      console.error('[Atlas Comet] Erro ao clonar ticket:', error);
+
+      // ─── Error Toast ──────────────────────────────────────────────────
+      while (modalBody.firstChild) modalBody.removeChild(modalBody.firstChild);
+
+      const errorContainer = document.createElement('div');
+      errorContainer.style.cssText = `
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 40px 30px; text-align: center;
+        animation: atlas-comet-crossfade 0.3s ease-out forwards;
+      `;
+
+      const warnIcon = document.createElement('div');
+      warnIcon.style.cssText =
+        'width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; color: #d9534f;';
+      warnIcon.innerHTML = `
+        <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      `;
+
+      const errorText = document.createElement('p');
+      errorText.style.cssText =
+        'color: #29735c; font-size: 15px; font-weight: 500; margin: 0 0 8px 0;';
+      errorText.textContent = 'Erro ao clonar ticket.';
+
+      const errorDetail = document.createElement('pre');
+      errorDetail.style.cssText =
+        'color: #999; font-size: 11px; text-align: left; margin-top: 10px; white-space: pre-wrap; word-break: break-all; max-width: 100%;';
+      errorDetail.textContent = error instanceof Error ? error.message : String(error);
+
+      errorContainer.appendChild(warnIcon);
+      errorContainer.appendChild(errorText);
+      errorContainer.appendChild(errorDetail);
+      modalBody.appendChild(errorContainer);
+
+      setTimeout(() => overlay.remove(), 5000);
     }
   }
 }

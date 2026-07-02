@@ -3,6 +3,14 @@ import { TicketObserver } from './observer';
 import { CONSTANTS } from './constants';
 import { ContextManager } from './context';
 
+// Disable all console logs for production
+const noop = () => {};
+console.log = noop;
+console.info = noop;
+console.warn = noop;
+console.error = noop;
+console.debug = noop;
+
 /**
  * Main entry point for the content script.
  *
@@ -27,6 +35,7 @@ class ExtensionController {
    * Sets up all necessary listeners and checks the current URL.
    */
   public init(): void {
+    console.log(`[Atlas Comet] 🚀 Extensão inicializada! Versão da build: ${new Date().getTime()}`);
     ContextManager.setupGlobalProtection();
     this.setupMessageListener();
     this.handleRouting(window.location.href);

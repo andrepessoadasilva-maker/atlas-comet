@@ -1,5 +1,13 @@
 import { CONSTANTS } from './constants';
 
+// Disable all console logs for production
+const noop = () => {};
+console.log = noop;
+console.info = noop;
+console.warn = noop;
+console.error = noop;
+console.debug = noop;
+
 /**
  * Listen to changes in the browser history state (History API pushState/replaceState).
  *

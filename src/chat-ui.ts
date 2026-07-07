@@ -692,26 +692,21 @@ export class ChatUIFactory {
           timestamp: new Date().toISOString(),
         };
 
-        // Store the selection in AppState (in-memory + chrome.storage.local)
+        // Store the selection in AppState (in-memory + chrome.storage.local + sessionStorage)
         AppState.getInstance().setChatServiceSelection(selection);
 
-        // ─── Show Success Toast (API Interception handles the rest) ────────
+        // ─── Show Success Toast ────────────────────────────────────────────
         this.showSuccessToast(overlay.querySelector('div'), overlay, selection);
 
-        // ─── Auto-submit the Chat Resolution Modal ─────────────────────────
-        // The user shouldn't have to manually click the submit button.
-        // We find the primary button in the footer and click it for them.
-        setTimeout(() => {
-          const footer = document.querySelector(CONSTANTS.SELECTORS.CHAT_RESOLUTION_FOOTER);
-          if (footer) {
-            // Find all primary buttons in the footer (usually "Resolver E Criar" is the last one)
-            const resolveBtns = Array.from(footer.querySelectorAll('button.nucleus-button--primary'));
-            const resolveBtn = resolveBtns[resolveBtns.length - 1] as HTMLButtonElement | undefined;
-            if (resolveBtn) {
-              resolveBtn.click();
-            }
-          }
-        }, 400); // Short delay to let the success toast animation start
+        // ─── Fill Form Fields & Auto-Submit ─────────────────────────────────
+        // Instead of blindly clicking "Resolver e Criar" (which fails because
+        // required fields are empty), we now programmatically fill ALL required
+        // fields in the Freshdesk resolution form BEFORE triggering the submit.
+        // This ensures the client-side validation passes and the fetch request
+        // is actually sent (where bridge-inject.js intercepts it to inject N2/N3).
+        this.fillFormFieldsAndSubmit(selection).catch((err) => {
+          console.error('[Atlas Comet Chat] Erro ao preencher formulário:', err);
+        });
       });
 
       container.appendChild(li);
@@ -760,6 +755,511 @@ export class ChatUIFactory {
     this.updateServiceBadge(selection);
 
     setTimeout(() => overlay.remove(), 1500);
+  }
+
+  // ─── Form Field Filling Utilities ──────────────────────────────────────────
+
+  /**
+   * Simple async delay utility for pacing form interactions.
+   * Required because Ember/React frameworks need time to process DOM changes
+   * between sequential dropdown selections.
+   *
+   * @param ms - Milliseconds to wait.
+   */
+  private static delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Master orchestrator: fills all required fields in the Freshdesk chat
+   * resolution modal and clicks "Resolver e Criar" to submit.
+   *
+   * Flow:
+   * 1. Wait for the success toast to start animating (UX)
+   * 2. Find the resolution modal form
+   * 3. Fill Tipo, Serviço Nível 1, Grupo, and Agente dropdowns
+   * 4. Wait for the form framework to process all changes
+   * 5. Click the primary submit button
+   *
+   * Each field uses an adaptive strategy that tries native <select>,
+   * fw-select web components, and click-based approaches in sequence.
+   *
+   * @param selection - The ChatServiceSelection containing Tipo, N1, N2, N3.
+   */
+  private static async fillFormFieldsAndSubmit(
+    selection: ChatServiceSelection,
+  ): Promise<void> {
+    // Brief pause to let the success toast render before interacting with the form
+    await this.delay(600);
+
+    const modal = document.querySelector(CONSTANTS.SELECTORS.CHAT_RESOLUTION_MODAL);
+    if (!modal) {
+      console.error('[Atlas Comet Chat] Modal de resolução não encontrado para preenchimento');
+      return;
+    }
+
+    console.log('[Atlas Comet Chat] Iniciando preenchimento automático do formulário...');
+
+    // ─── Step 1: Fill "Tipo" ──────────────────────────────────────────────────
+    const tipoFilled = await this.selectFormField(modal, 'Tipo', selection.tipo);
+    console.log(`[Atlas Comet Chat] Tipo "${selection.tipo}": ${tipoFilled ? '✅' : '❌'}`);
+    await this.delay(400);
+
+    // ─── Step 2: Fill "Serviço Nível 1" ──────────────────────────────────────
+    const n1Filled = await this.selectFormField(modal, 'Nível 1', selection.n1);
+    console.log(`[Atlas Comet Chat] N1 "${selection.n1}": ${n1Filled ? '✅' : '❌'}`);
+    await this.delay(400);
+
+    // ─── Step 3: Fill "Grupo" (first available non-placeholder option) ────────
+    const grupoFilled = await this.selectFirstAvailableOption(modal, 'Grupo');
+    console.log(`[Atlas Comet Chat] Grupo: ${grupoFilled ? '✅' : '❌'}`);
+    await this.delay(400);
+
+    // ─── Step 4: Fill "Agente" (first available non-placeholder option) ───────
+    const agenteFilled = await this.selectFirstAvailableOption(modal, 'Agente');
+    console.log(`[Atlas Comet Chat] Agente: ${agenteFilled ? '✅' : '❌'}`);
+    await this.delay(600);
+
+    // ─── Step 5: Click "Resolver e Criar" ────────────────────────────────────
+    const footer = document.querySelector(CONSTANTS.SELECTORS.CHAT_RESOLUTION_FOOTER);
+    if (footer) {
+      // Find all buttons in the footer and look for the primary submit button
+      const allBtns = Array.from(footer.querySelectorAll('button'));
+      const resolveBtn = allBtns.find((btn) =>
+        btn.textContent?.toLowerCase().includes('resolver'),
+      ) as HTMLButtonElement | undefined;
+
+      if (resolveBtn) {
+        console.log('[Atlas Comet Chat] Clicando em "Resolver e Criar"...');
+        resolveBtn.click();
+      } else {
+        // Fallback: click the last primary button in the footer
+        const primaryBtns = Array.from(
+          footer.querySelectorAll('button.nucleus-button--primary'),
+        ) as HTMLButtonElement[];
+        const fallbackBtn = primaryBtns[primaryBtns.length - 1];
+        if (fallbackBtn) {
+          console.log('[Atlas Comet Chat] Clicando no botão primário (fallback)...');
+          fallbackBtn.click();
+        } else {
+          console.error('[Atlas Comet Chat] Botão de submissão não encontrado!');
+        }
+      }
+    } else {
+      console.error('[Atlas Comet Chat] Footer do modal não encontrado!');
+    }
+  }
+
+  /**
+   * Attempts to select a specific value in a form dropdown identified by its
+   * label text. Tries multiple strategies to handle different Freshdesk UI
+   * component types:
+   *
+   * Strategy 1: Native <select> elements
+   * Strategy 2: fw-select (Freshworks Crayons) web components
+   * Strategy 3: Click-based interaction (Ember/Nucleus dropdowns)
+   *
+   * @param modal - The modal container element to search within.
+   * @param labelSearch - Partial text to match the field's label (e.g., "Tipo", "Nível 1").
+   * @param value - The exact option text to select.
+   * @returns True if the field was successfully filled, false otherwise.
+   */
+  private static async selectFormField(
+    modal: Element,
+    labelSearch: string,
+    value: string,
+  ): Promise<boolean> {
+    // ─── Strategy 1: Native <select> elements ──────────────────────────────
+    const result = this.tryNativeSelect(modal, labelSearch, value);
+    if (result) return true;
+
+    // ─── Strategy 2: fw-select web components ──────────────────────────────
+    const fwResult = await this.tryFwSelect(modal, labelSearch, value);
+    if (fwResult) return true;
+
+    // ─── Strategy 3: Click-based Ember/Nucleus dropdowns ───────────────────
+    const clickResult = await this.tryClickBasedDropdown(modal, labelSearch, value);
+    if (clickResult) return true;
+
+    console.warn(`[Atlas Comet Chat] Não foi possível preencher o campo "${labelSearch}" com "${value}"`);
+    return false;
+  }
+
+  /**
+   * Attempts to select the first non-placeholder option in a form dropdown.
+   * Used for fields like "Grupo" and "Agente" where the specific value
+   * doesn't matter — we just need to pass validation.
+   *
+   * @param modal - The modal container element.
+   * @param labelSearch - Partial text to match the field's label.
+   * @returns True if an option was selected, false otherwise.
+   */
+  private static async selectFirstAvailableOption(
+    modal: Element,
+    labelSearch: string,
+  ): Promise<boolean> {
+    // ─── Strategy 1: Native <select> ───────────────────────────────────────
+    const select = this.findNativeSelectByLabel(modal, labelSearch);
+    if (select) {
+      for (const option of Array.from(select.options)) {
+        // Skip placeholder/disabled options
+        if (option.disabled || option.value === '' || option.value === option.text) {
+          continue;
+        }
+        select.value = option.value;
+        this.dispatchSelectEvents(select);
+        return true;
+      }
+    }
+
+    // ─── Strategy 2: fw-select — click trigger and pick first option ───────
+    const fwSelect = this.findFwSelectByLabel(modal, labelSearch);
+    if (fwSelect) {
+      (fwSelect as HTMLElement).click();
+      await this.delay(300);
+      const fwOption = fwSelect.querySelector('fw-select-option:not([disabled])') as HTMLElement;
+      if (fwOption) {
+        fwOption.click();
+        await this.delay(200);
+        return true;
+      }
+    }
+
+    // ─── Strategy 3: Click-based — open dropdown and click first option ────
+    const clickResult = await this.tryClickFirstDropdownOption(modal, labelSearch);
+    if (clickResult) return true;
+
+    console.warn(`[Atlas Comet Chat] Não foi possível selecionar primeira opção para "${labelSearch}"`);
+    return false;
+  }
+
+  // ─── Strategy 1 Helpers: Native <select> ────────────────────────────────────
+
+  /**
+   * Locates a native <select> element by matching its associated label text.
+   * Searches both explicit <label> elements and common CSS class patterns
+   * used by Freshworks for field labels.
+   *
+   * @param modal - Container to search within.
+   * @param labelSearch - Partial label text to match (case-insensitive).
+   * @returns The matching <select> element, or null if not found.
+   */
+  private static findNativeSelectByLabel(
+    modal: Element,
+    labelSearch: string,
+  ): HTMLSelectElement | null {
+    const normalizedSearch = labelSearch.toLowerCase();
+    const selects = Array.from(modal.querySelectorAll('select')) as HTMLSelectElement[];
+
+    for (const select of selects) {
+      // Check 1: Look for an associated <label> via 'for' attribute
+      if (select.id) {
+        const label = modal.querySelector(`label[for="${select.id}"]`);
+        if (label && label.textContent?.toLowerCase().includes(normalizedSearch)) {
+          return select;
+        }
+      }
+
+      // Check 2: Look for a parent container with a label child
+      const container = select.closest(
+        '.form-field, .field-container, .form-group, [class*="field"], [class*="form"], div',
+      );
+      if (container) {
+        const label = container.querySelector('label, .field-label, .form-label');
+        if (label && label.textContent?.toLowerCase().includes(normalizedSearch)) {
+          return select;
+        }
+      }
+
+      // Check 3: Match by the select's own name/aria-label attributes
+      const nameAttr = select.name || select.getAttribute('aria-label') || '';
+      if (nameAttr.toLowerCase().includes(normalizedSearch)) {
+        return select;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Attempts to select a specific value in a native <select> element.
+   *
+   * @param modal - Container to search within.
+   * @param labelSearch - Partial label text to identify the field.
+   * @param value - The option text or value to select.
+   * @returns True if the value was found and selected.
+   */
+  private static tryNativeSelect(
+    modal: Element,
+    labelSearch: string,
+    value: string,
+  ): boolean {
+    const select = this.findNativeSelectByLabel(modal, labelSearch);
+    if (!select) return false;
+
+    const normalizedValue = value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+    for (const option of Array.from(select.options)) {
+      const optText = option.text
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+      const optValue = option.value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+      if (optText === normalizedValue || optValue === normalizedValue) {
+        select.value = option.value;
+        this.dispatchSelectEvents(select);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Dispatches the standard DOM events that Ember/React/Vue frameworks listen
+   * to when a <select> value changes. Without these events, the framework
+   * won't recognize the programmatic change.
+   *
+   * @param element - The <select> element whose value was changed.
+   */
+  private static dispatchSelectEvents(element: HTMLSelectElement): void {
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    element.dispatchEvent(new Event('blur', { bubbles: true }));
+  }
+
+  // ─── Strategy 2 Helpers: fw-select Web Components ──────────────────────────
+
+  /**
+   * Locates a fw-select (Freshworks Crayons) web component by label.
+   *
+   * @param modal - Container to search within.
+   * @param labelSearch - Partial label text to match.
+   * @returns The matching fw-select element, or null.
+   */
+  private static findFwSelectByLabel(
+    modal: Element,
+    labelSearch: string,
+  ): Element | null {
+    const normalizedSearch = labelSearch.toLowerCase();
+
+    // fw-select elements often have a 'label' attribute
+    const fwSelects = Array.from(modal.querySelectorAll('fw-select'));
+    for (const fwSelect of fwSelects) {
+      const label = fwSelect.getAttribute('label') || '';
+      if (label.toLowerCase().includes(normalizedSearch)) {
+        return fwSelect;
+      }
+    }
+
+    // Also check for fw-select inside labeled containers
+    const labels = Array.from(modal.querySelectorAll('label'));
+    for (const label of labels) {
+      if (label.textContent?.toLowerCase().includes(normalizedSearch)) {
+        const container = label.closest('[class*="field"], [class*="form"], div');
+        if (container) {
+          const fwSelect = container.querySelector('fw-select');
+          if (fwSelect) return fwSelect;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Attempts to select a value in a fw-select web component.
+   * Sets the value property and dispatches the fwChange event.
+   *
+   * @param modal - Container to search within.
+   * @param labelSearch - Partial label text to identify the field.
+   * @param value - The option value to select.
+   * @returns True if the value was set successfully.
+   */
+  private static async tryFwSelect(
+    modal: Element,
+    labelSearch: string,
+    value: string,
+  ): Promise<boolean> {
+    const fwSelect = this.findFwSelectByLabel(modal, labelSearch);
+    if (!fwSelect) return false;
+
+    // Try setting value directly
+    (fwSelect as HTMLElement & { value: string }).value = value;
+    fwSelect.dispatchEvent(
+      new CustomEvent('fwChange', { detail: { value }, bubbles: true }),
+    );
+    await this.delay(200);
+
+    // If direct set didn't work, try clicking to open and selecting
+    (fwSelect as HTMLElement).click();
+    await this.delay(300);
+
+    const options = fwSelect.querySelectorAll('fw-select-option');
+    for (const opt of Array.from(options)) {
+      const optText = opt.textContent?.trim() || opt.getAttribute('value') || '';
+      if (optText.toLowerCase().includes(value.toLowerCase())) {
+        (opt as HTMLElement).click();
+        await this.delay(200);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  // ─── Strategy 3 Helpers: Click-Based Ember/Nucleus Dropdowns ───────────────
+
+  /**
+   * Attempts to select a value by physically clicking on dropdown triggers
+   * and option elements. This is the fallback strategy for Ember-rendered
+   * or custom Nucleus UI components.
+   *
+   * @param modal - Container to search within.
+   * @param labelSearch - Partial label text to identify the field.
+   * @param value - The option text to find and click.
+   * @returns True if the option was found and clicked.
+   */
+  private static async tryClickBasedDropdown(
+    modal: Element,
+    labelSearch: string,
+    value: string,
+  ): Promise<boolean> {
+    const normalizedSearch = labelSearch.toLowerCase();
+    const normalizedValue = value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+    // Find the field container by label text
+    const labels = Array.from(
+      modal.querySelectorAll('label, .field-label, .form-label, [class*="label"]'),
+    );
+
+    for (const label of labels) {
+      if (!label.textContent?.toLowerCase().includes(normalizedSearch)) continue;
+
+      const container = label.closest(
+        '.form-field, .field-container, .form-group, [class*="field"], [class*="form"], div',
+      );
+      if (!container) continue;
+
+      // Find clickable trigger elements
+      const trigger =
+        container.querySelector('.ember-power-select-trigger') ||
+        container.querySelector('[role="listbox"]') ||
+        container.querySelector('[role="combobox"]') ||
+        container.querySelector('.dropdown-trigger') ||
+        container.querySelector('.select-trigger') ||
+        container.querySelector('[class*="trigger"]') ||
+        container.querySelector('[class*="select"]:not(select)');
+
+      if (!trigger) continue;
+
+      // Click to open the dropdown
+      (trigger as HTMLElement).click();
+      await this.delay(500);
+
+      // Search for the matching option in the opened dropdown (may be in a portal/wormhole)
+      const optionContainers = [
+        ...Array.from(document.querySelectorAll('.ember-power-select-options li')),
+        ...Array.from(document.querySelectorAll('.ember-power-select-option')),
+        ...Array.from(document.querySelectorAll('[role="option"]')),
+        ...Array.from(document.querySelectorAll('.dropdown-option')),
+        ...Array.from(container.querySelectorAll('li, [role="option"]')),
+      ];
+
+      for (const opt of optionContainers) {
+        const optText = (opt.textContent?.trim() || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim();
+
+        if (optText === normalizedValue || optText.includes(normalizedValue)) {
+          (opt as HTMLElement).click();
+          await this.delay(300);
+          return true;
+        }
+      }
+
+      // Close the dropdown if no match was found (press Escape)
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await this.delay(200);
+    }
+
+    return false;
+  }
+
+  /**
+   * Click-based strategy for selecting the first non-placeholder option.
+   * Opens the dropdown and clicks the first available option.
+   *
+   * @param modal - Container to search within.
+   * @param labelSearch - Partial label text to identify the field.
+   * @returns True if an option was clicked.
+   */
+  private static async tryClickFirstDropdownOption(
+    modal: Element,
+    labelSearch: string,
+  ): Promise<boolean> {
+    const normalizedSearch = labelSearch.toLowerCase();
+
+    const labels = Array.from(
+      modal.querySelectorAll('label, .field-label, .form-label, [class*="label"]'),
+    );
+
+    for (const label of labels) {
+      if (!label.textContent?.toLowerCase().includes(normalizedSearch)) continue;
+
+      const container = label.closest(
+        '.form-field, .field-container, .form-group, [class*="field"], [class*="form"], div',
+      );
+      if (!container) continue;
+
+      const trigger =
+        container.querySelector('.ember-power-select-trigger') ||
+        container.querySelector('[role="listbox"]') ||
+        container.querySelector('[role="combobox"]') ||
+        container.querySelector('.dropdown-trigger') ||
+        container.querySelector('.select-trigger') ||
+        container.querySelector('[class*="trigger"]') ||
+        container.querySelector('[class*="select"]:not(select)');
+
+      if (!trigger) continue;
+
+      (trigger as HTMLElement).click();
+      await this.delay(500);
+
+      // Find and click the first non-disabled option
+      const optionContainers = [
+        ...Array.from(document.querySelectorAll('.ember-power-select-option:not([aria-disabled="true"])')),
+        ...Array.from(document.querySelectorAll('[role="option"]:not([aria-disabled="true"])')),
+        ...Array.from(container.querySelectorAll('li:not([disabled])')),
+      ];
+
+      if (optionContainers.length > 0) {
+        (optionContainers[0] as HTMLElement).click();
+        await this.delay(300);
+        return true;
+      }
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await this.delay(200);
+    }
+
+    return false;
   }
 
   // ─── Text Highlighting Helper ───────────────────────────────────────────────

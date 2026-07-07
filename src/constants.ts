@@ -28,6 +28,27 @@ export const CONSTANTS = {
     CSRF_META: 'meta[name="csrf-token"]',
     /** Container where Freshdesk renders the "Refresh properties" link after a websocket update */
     REFRESH_BANNER: '.ticket-sidebar-sticky__refresh-text',
+
+    // ─── Chat / Messaging Interface Selectors ──────────────────────────────
+    /**
+     * Resolve/Close button selectors in the Freshdesk Messaging interface.
+     * Used to detect when the agent is about to finalize a conversation.
+     */
+    CHAT_RESOLVE_BUTTON: [
+      'button[data-test-id="resolve-conversation"]',
+      'fw-button[data-test-id="resolve-conversation"]',
+      'button[data-test-id="resolve"]',
+      '.resolve-btn',
+      'button.resolve-conversation',
+    ] as readonly string[],
+    /** Container of the resolution modal (the sidebar that slides in to create a ticket) */
+    CHAT_RESOLUTION_MODAL: '.nucleus-modal__dialog',
+    /** Footer of the resolution modal where the 'Cancel' and 'Resolver e criar' buttons live */
+    CHAT_RESOLUTION_FOOTER: '.nucleus-modal__footer',
+    /** 
+     * The form element containing the 'Tipo', 'Serviço Nível 1', etc fields.
+     */
+    CHAT_TICKET_FORM: '.fd-ticket-form',
   },
 
   // Extension Messaging Events
@@ -55,6 +76,8 @@ export const CONSTANTS = {
     CHAT_SUBJECT_KEYWORDS: ['CONVERSA', 'CHAT'] as readonly string[],
     /** CSS selector for the ticket subject heading element in Freshdesk's DOM */
     SUBJECT_HEADING_SELECTOR: '.ticket-subject-heading',
+    /** chrome.storage.local key used to persist the selected service for an active chat session */
+    CHAT_SERVICE_STORAGE_KEY: 'atlas_chat_service_selection',
   },
 
   // Freshdesk Internal API Endpoints
@@ -66,6 +89,8 @@ export const CONSTANTS = {
   // URL Patterns
   URL: {
     TICKETS_PATH: '/a/tickets/',
+    /** Base path segment that identifies the Freshdesk Messaging (chat) interface */
+    MESSAGING_PATH: '/crm/messaging/',
     /**
      * List of host suffixes where the extension is active.
      * Used by the background script's webNavigation filter to detect SPA transitions.
@@ -73,6 +98,7 @@ export const CONSTANTS = {
      */
     ALLOWED_HOST_SUFFIXES: [
       'freshdesk.com',
+      'myfreshworks.com',
       'ajuda.cvcrm.com.br',
       'ajuda.anapro.com.br',
     ] as readonly string[],

@@ -20,6 +20,59 @@
 (function() {
   'use strict';
 
+  // ─── API Interception (Phase 3) ──────────────────────────────────────────────
+  // Intercepts the Freshdesk Messaging POST request when a chat is resolved,
+  // injecting the selected service fields (Tipo, N1, N2, N3) transparently.
+  var originalFetch = window.fetch;
+  window.fetch = function() {
+    var args = Array.prototype.slice.call(arguments);
+    var url = args[0];
+    
+    if (typeof url === 'string' && url.indexOf('/app/freshdesk/ticket') !== -1) {
+      var init = args[1];
+      if (init && init.method && init.method.toUpperCase() === 'POST' && init.body) {
+        var selectionStr = null;
+        try {
+          selectionStr = window.sessionStorage.getItem('atlas_chat_service_selection');
+        } catch (e) {
+          // Ignore sessionStorage errors
+        }
+
+        if (selectionStr) {
+          try {
+            var selection = JSON.parse(selectionStr);
+            var bodyObj = JSON.parse(init.body);
+
+            if (bodyObj && bodyObj.ticketFields) {
+              // Inject custom fields
+              bodyObj.ticketFields.type = selection.tipo || bodyObj.ticketFields.type;
+              bodyObj.ticketFields.custom_fields = bodyObj.ticketFields.custom_fields || {};
+              bodyObj.ticketFields.custom_fields.cf_servio_nvel_1 = selection.n1 || '';
+              bodyObj.ticketFields.custom_fields.cf_servio_nvel_2 = selection.n2 || '';
+              bodyObj.ticketFields.custom_fields.cf_servio_nvel_3 = selection.n3 || '';
+
+              // Stringify the updated body back into the request
+              init.body = JSON.stringify(bodyObj);
+              args[1] = init;
+
+              // Clear the selection so it doesn't affect subsequent, unrelated chats
+              try {
+                window.sessionStorage.removeItem('atlas_chat_service_selection');
+              } catch (e) {}
+
+              console.log('[Atlas Comet Bridge] ✅ Injected service data into chat resolution request');
+            }
+          } catch (e) {
+            console.error('[Atlas Comet Bridge] ❌ Failed to intercept and modify fetch request', e);
+          }
+        }
+      }
+    }
+    
+    // MUST apply to window context to prevent TypeError: Illegal invocation
+    return originalFetch.apply(window, args);
+  };
+
   // ─── CSRF Token Management ───────────────────────────────────────────────────
 
   /**
@@ -240,7 +293,12 @@
    * Pre-fetch the CSRF token on bridge initialization so it's ready
    * when the first API request comes in. This eliminates the latency
    * of fetching the token at request time.
+   * 
+   * Skip this on the CRM/Messaging interface because it uses a different
+   * authentication flow and the bootstrap endpoint returns HTML there.
    */
-  fetchCsrfToken();
+  if (window.location.pathname.indexOf('/crm/messaging') === -1) {
+    fetchCsrfToken();
+  }
 
 })();

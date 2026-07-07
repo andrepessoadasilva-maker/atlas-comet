@@ -1,5 +1,6 @@
 import { AppState } from './state';
 import { TicketObserver } from './observer';
+import { ChatObserver } from './chat-observer';
 import { CONSTANTS } from './constants';
 import { ContextManager } from './context';
 
@@ -18,16 +19,25 @@ console.debug = noop;
  * Bootstraps the application within the isolated world of the webpage.
  * It manages the lifecycle of the extension by listening to navigation events
  * (from the background script and local window events) and coordinating
- * the observation of Freshdesk tickets.
+ * the observation of Freshdesk tickets AND chat conversations.
+ *
+ * Routes:
+ * - `/a/tickets/{id}` → TicketObserver (existing service definition flow)
+ * - `/crm/messaging/.../conversation/{id}` → ChatObserver (new chat service flow)
+ * - Any other URL → disconnects all observers to save resources
  */
 class ExtensionController {
   private appState: AppState;
   private ticketObserver: TicketObserver;
+  private chatObserver: ChatObserver;
   private currentSessionTicketId: string | null = null;
+  /** Tracks the active conversation ID to detect SPA transitions between chats */
+  private currentSessionConversationId: string | null = null;
 
   constructor() {
     this.appState = AppState.getInstance();
     this.ticketObserver = new TicketObserver();
+    this.chatObserver = new ChatObserver();
   }
 
   /**
@@ -62,25 +72,68 @@ class ExtensionController {
 
   /**
    * Evaluates the current URL to decide if observation is required.
-   * Tracks ticket transitions to clean up previously observed states.
+   * Routes to the appropriate observer based on the URL pattern:
+   * - Ticket pages → TicketObserver
+   * - Messaging pages → ChatObserver
+   * - Other pages → disconnect all observers
+   *
+   * Tracks transitions between tickets/conversations to clean up state.
    *
    * @param url - The current full URL of the browser window.
    */
   private handleRouting(url: string): void {
     const ticketId = this.appState.extractTicketIdFromUrl(url);
+    const conversationId = this.appState.extractConversationIdFromUrl(url);
+    const isMessaging = this.appState.isMessagingUrl(url);
 
-    // If we've navigated to a different ticket (or home), clear the processed cache
-    if (this.currentSessionTicketId !== ticketId) {
-      this.appState.clearProcessedTicket();
-      this.currentSessionTicketId = ticketId;
-    }
-
+    // ─── Route 1: Ticket Page (/a/tickets/{id}) ──────────────────────────────
     if (ticketId) {
+      // Disconnect chat observer if we came from messaging
+      this.chatObserver.disconnect();
+      this.currentSessionConversationId = null;
+
+      // Track ticket transitions
+      if (this.currentSessionTicketId !== ticketId) {
+        this.appState.clearProcessedTicket();
+        this.currentSessionTicketId = ticketId;
+      }
       this.ticketObserver.startObserving(ticketId);
-    } else {
-      // Not a ticket page, disconnect observer to save resources
-      this.ticketObserver.disconnect();
+      return;
     }
+
+    // ─── Route 2: Messaging Page (/crm/messaging/.../conversation/{id}) ──────
+    if (isMessaging && conversationId) {
+      // Disconnect ticket observer if we came from a ticket
+      this.ticketObserver.disconnect();
+      this.currentSessionTicketId = null;
+      this.appState.clearProcessedTicket();
+
+      // Track conversation transitions
+      if (this.currentSessionConversationId !== conversationId) {
+        this.currentSessionConversationId = conversationId;
+      }
+      this.chatObserver.startObserving(conversationId);
+      return;
+    }
+
+    // ─── Route 3: Messaging Page without specific conversation ───────────────
+    // User is on the inbox view but hasn't selected a conversation yet.
+    // Keep the chat observer running if it was already active (the agent may
+    // be switching between conversations in the SPA), otherwise disconnect.
+    if (isMessaging && !conversationId) {
+      this.ticketObserver.disconnect();
+      this.currentSessionTicketId = null;
+      this.appState.clearProcessedTicket();
+      // Don't disconnect chat observer — the conversation panel might still be visible
+      return;
+    }
+
+    // ─── Route 4: No matching page — disconnect everything ───────────────────
+    this.ticketObserver.disconnect();
+    this.chatObserver.disconnect();
+    this.currentSessionTicketId = null;
+    this.currentSessionConversationId = null;
+    this.appState.clearProcessedTicket();
   }
 }
 

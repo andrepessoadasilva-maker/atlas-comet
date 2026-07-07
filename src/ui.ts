@@ -102,13 +102,16 @@ export class UIFactory {
       btnClone.appendChild(cloneIcon);
       btnClone.appendChild(document.createTextNode('Clonar Ticket'));
 
+      btnClone.type = 'button';
       btnClone.addEventListener('mouseenter', () => {
         btnClone.style.opacity = '0.85';
       });
       btnClone.addEventListener('mouseleave', () => {
         btnClone.style.opacity = '1';
       });
-      btnClone.onclick = () => {
+      btnClone.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         this.cloneTicket(ticketId);
       };
       container.appendChild(btnClone);
@@ -151,9 +154,11 @@ export class UIFactory {
     }
 
     // Ensure the container is attached to the correct parent
-    const topBarActionContainer =
-      document.querySelector('.page-actions__left') ||
-      document.querySelector('.ticket-details-header .action-bar');
+    const possibleContainers = Array.from(
+      document.querySelectorAll('.page-actions__left, .ticket-details-header .action-bar')
+    );
+    const topBarActionContainer = possibleContainers.find(el => el.getBoundingClientRect().width > 0) || possibleContainers[0];
+    
     if (topBarActionContainer && !topBarActionContainer.contains(container)) {
       topBarActionContainer.prepend(container);
     }
@@ -209,7 +214,8 @@ export class UIFactory {
     `;
 
     // Insert right after the subject heading
-    const subjectHeading = document.querySelector('.ticket-subject-heading');
+    const possibleHeadings = Array.from(document.querySelectorAll('.ticket-subject-heading'));
+    const subjectHeading = possibleHeadings.find(el => el.getBoundingClientRect().width > 0) || possibleHeadings[0];
     if (subjectHeading) {
       subjectHeading.appendChild(label);
     }
@@ -227,7 +233,8 @@ export class UIFactory {
    * Cleans the ticket subject in the DOM by removing any mention of '[CHAT] - OFFLINE'.
    */
   private static cleanSubjectInDOM(): void {
-    const subjectHeading = document.querySelector('.ticket-subject-heading');
+    const possibleHeadings = Array.from(document.querySelectorAll('.ticket-subject-heading'));
+    const subjectHeading = possibleHeadings.find(el => el.getBoundingClientRect().width > 0) || possibleHeadings[0];
     if (subjectHeading && subjectHeading.textContent) {
       // We extract textContent and replace it directly.
       // This is secure (no innerHTML) and fulfills the UI cleanup requirement.
@@ -1849,6 +1856,13 @@ export class UIFactory {
     const company = this.formatProperName(rawCompany, false);
     const client = this.formatProperName(rawClient, true);
 
+    console.log('[Atlas Comet] resolveTicketIdentities Final:', {
+      rawCompany,
+      rawClient,
+      formattedCompany: company,
+      formattedClient: client
+    });
+
     return { company, client, tags: currentTags };
   }
 
@@ -1884,12 +1898,21 @@ export class UIFactory {
     );
 
     try {
+      console.log(`[Atlas Comet] Resolvendo identidades para auto-rename do ticket ${ticketId}...`);
       // Resolve company and client names via multi-layer scraping strategy
       const { company, client, tags } = await this.resolveTicketIdentities(ticketId);
 
       // Build the new subject using the same formula as the manual flow
       const servicoFinal = n3 || n2;
       const newSubject = `${company} - ${client} - ${servicoFinal}`;
+
+      console.log(`[Atlas Comet] Identidades Resolvidas:`, {
+        companyEncontrada: company,
+        clientEncontrado: client,
+        servicoFinal: servicoFinal,
+        novoTituloGerado: newSubject,
+        tagsFinais: tags
+      });
 
       // Smart tag logic: remove control tags and re-add only if needed
       const finalTags = tags.filter(
@@ -1899,11 +1922,13 @@ export class UIFactory {
         finalTags.push('pendente_nome_empresa_cliente');
       }
 
+      console.log(`[Atlas Comet] Disparando update properties para o título: "${newSubject}"`);
       // Update subject silently via API (no service level changes)
       await FreshdeskAPI.updateTicketSubjectSilently(ticketId, newSubject, finalTags);
 
       // Update the DOM visually for instant feedback (same pattern as manual flow)
-      const subjectDisplay = document.querySelector(CONSTANTS.VALUES.SUBJECT_HEADING_SELECTOR);
+      const possibleHeadings = Array.from(document.querySelectorAll(CONSTANTS.VALUES.SUBJECT_HEADING_SELECTOR));
+      const subjectDisplay = possibleHeadings.find(el => el.getBoundingClientRect().width > 0) || possibleHeadings[0];
       if (subjectDisplay) {
         let textNodeUpdated = false;
         Array.from(subjectDisplay.childNodes).forEach((node) => {
@@ -1930,6 +1955,64 @@ export class UIFactory {
   // ─── Clone Ticket Feature ───────────────────────────────────────────────
 
   /**
+   * Exibe um modal de confirmação antes de clonar o ticket atual.
+   *
+   * @param ticketId - ID numérico do ticket a ser clonado.
+   */
+  private static cloneTicket(ticketId: string): void {
+    const confirmOverlay = document.createElement('div');
+    confirmOverlay.id = 'atlas-comet-clone-confirm-overlay';
+    confirmOverlay.className = 'atlas-modal-overlay';
+
+    const confirmModal = document.createElement('div');
+    confirmModal.className = 'atlas-modal-body';
+    confirmModal.style.cssText += 'min-width: 360px; max-width: 420px; padding: 24px; text-align: center;';
+
+    const title = document.createElement('h3');
+    title.style.cssText = 'color: #29735c; font-size: 18px; margin: 0 0 16px 0;';
+    title.textContent = 'Tem certeza que deseja clonar o ticket atual?';
+
+    const btnContainer = document.createElement('div');
+    btnContainer.style.cssText = 'display: flex; justify-content: center; gap: 12px; margin-top: 24px;';
+
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.style.cssText = 'padding: 10px 20px; background: #888; color: white; border: none; cursor: pointer; border-radius: 6px; font-weight: bold; transition: background 0.2s ease;';
+    btnCancel.textContent = 'Não, cancelar';
+    btnCancel.addEventListener('mouseenter', () => {
+      btnCancel.style.background = '#666';
+    });
+    btnCancel.addEventListener('mouseleave', () => {
+      btnCancel.style.background = '#888';
+    });
+    btnCancel.onclick = () => {
+      confirmOverlay.remove();
+    };
+
+    const btnConfirm = document.createElement('button');
+    btnConfirm.type = 'button';
+    btnConfirm.style.cssText = 'padding: 10px 20px; background: #02ac85; color: white; border: none; cursor: pointer; border-radius: 6px; font-weight: bold; transition: background 0.2s ease;';
+    btnConfirm.textContent = 'Sim, desejo';
+    btnConfirm.addEventListener('mouseenter', () => {
+      btnConfirm.style.background = '#028c6c';
+    });
+    btnConfirm.addEventListener('mouseleave', () => {
+      btnConfirm.style.background = '#02ac85';
+    });
+    btnConfirm.onclick = () => {
+      confirmOverlay.remove();
+      this.executeCloneTicket(ticketId);
+    };
+
+    btnContainer.appendChild(btnCancel);
+    btnContainer.appendChild(btnConfirm);
+    confirmModal.appendChild(title);
+    confirmModal.appendChild(btnContainer);
+    confirmOverlay.appendChild(confirmModal);
+    document.body.appendChild(confirmOverlay);
+  }
+
+  /**
    * Clones the current ticket by reading all its fields via the V2 API
    * and creating a new ticket with the same metadata via the internal API bridge.
    *
@@ -1943,7 +2026,7 @@ export class UIFactory {
    *
    * @param ticketId - The numeric ID of the ticket to clone.
    */
-  private static async cloneTicket(ticketId: string): Promise<void> {
+  private static async executeCloneTicket(ticketId: string): Promise<void> {
     // ─── Show Loading Toast ───────────────────────────────────────────────
     const overlay = document.createElement('div');
     overlay.id = 'atlas-comet-clone-overlay';
@@ -2146,7 +2229,8 @@ function handleTicketNavigation(newId: string): void {
     })
     .then((data) => {
       if (data && data.subject) {
-        const subjectDisplay = document.querySelector('.ticket-subject-heading');
+        const possibleHeadings = Array.from(document.querySelectorAll('.ticket-subject-heading'));
+        const subjectDisplay = possibleHeadings.find(el => el.getBoundingClientRect().width > 0) || possibleHeadings[0];
         if (subjectDisplay) {
           // Atualiza apenas o nó de texto para não quebrar bindings do Ember
           Array.from(subjectDisplay.childNodes).forEach((node) => {

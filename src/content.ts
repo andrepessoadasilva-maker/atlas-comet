@@ -59,6 +59,23 @@ class ExtensionController {
     chrome.runtime.onMessage.addListener((message) => {
       if (!ContextManager.isValid()) return;
       if (message.type === CONSTANTS.EVENTS.NAVIGATED) {
+        // CRITICAL GUARD: The background script fires onHistoryStateUpdated for ALL
+        // frames in the tab, including our hidden Plano C scraping iframe. When that
+        // iframe navigates to /crm/messaging/..., the background sends a NAVIGATED
+        // message with a messaging URL. Without this guard, handleRouting() would
+        // interpret it as the user leaving the ticket page and disconnect the
+        // TicketObserver, destroying all injected buttons.
+        //
+        // Fix: Only act on NAVIGATED messages that match the actual top-level window
+        // URL. If the message URL differs from window.location.href, it came from
+        // an iframe navigation and must be ignored.
+        const messageUrl = new URL(message.url);
+        const currentUrl = new URL(window.location.href);
+        if (messageUrl.pathname !== currentUrl.pathname) {
+          // This navigation happened in a sub-frame (e.g., Plano C iframe), not
+          // the main window. Ignore it to preserve the current observer state.
+          return;
+        }
         this.handleRouting(message.url);
       }
     });

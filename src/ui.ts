@@ -1349,10 +1349,23 @@ export class UIFactory {
           // Mark as defined in this session to prevent the observer from re-triggering "Sim, Offline"
           AppState.getInstance().setServiceDefined(true);
 
-          // Removed manual DOM mutation of the subject heading.
-          // Mutating text nodes directly corrupts Ember's virtual DOM state,
-          // causing Glimmer to crash when reloadTicketInEmber() is called.
-          // The title will be updated safely and naturally by Ember's reload below.
+          // Update the UI title immediately for instant visual feedback.
+          // In the manual flow the agent is deliberately waiting (modal is open),
+          // so the subsequent reloadTicketInEmber() call is safe here.
+          const subjectDisplay = document.querySelector(CONSTANTS.VALUES.SUBJECT_HEADING_SELECTOR);
+          if (subjectDisplay) {
+            let textNodeUpdated = false;
+            Array.from(subjectDisplay.childNodes).forEach((node) => {
+              if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
+                node.textContent = newSubject + ' ';
+                textNodeUpdated = true;
+              }
+            });
+            if (!textNodeUpdated && subjectDisplay.firstChild) {
+              subjectDisplay.firstChild.textContent = newSubject + ' ';
+            }
+          }
+
           // Remove the offline label and confirm button from the UI immediately
           this.removeOfflineLabel();
           const btnConfirm = document.getElementById('confirm-offline');
@@ -1925,16 +1938,31 @@ export class UIFactory {
       // Update subject silently via API (no service level changes)
       await FreshdeskAPI.updateTicketSubjectSilently(ticketId, newSubject, finalTags);
 
-      // Removed manual DOM mutation of the subject heading.
-      // Mutating text nodes directly corrupts Ember's virtual DOM state,
-      // causing Glimmer to crash when reloadTicketInEmber() is called.
-      
-      // We also DO NOT call reloadTicketInEmber() here. 
-      // Since this flow can be delayed by up to 15 seconds (Plano C iframe),
-      // the agent might already be interacting with the ticket (typing a reply).
-      // Forcing a model reload while the agent is active causes Ember to crash, 
-      // destroying the page layout and hiding our buttons.
-      // The API update above is sufficient; the UI will update on the next natural refresh.
+      // Update the DOM title directly for instant visual feedback.
+      // We do NOT call reloadTicketInEmber() here because the Plano C iframe
+      // can delay this flow by up to 15 seconds, during which the agent is
+      // already interacting with the ticket. A forced Ember reload at that
+      // point would crash the Glimmer rendering engine.
+      // Instead, we safely update only the text node inside the heading.
+      // This is safe because we are NOT following it with a model reload.
+      const possibleHeadings = Array.from(
+        document.querySelectorAll(CONSTANTS.VALUES.SUBJECT_HEADING_SELECTOR),
+      ) as HTMLElement[];
+      const subjectDisplay =
+        possibleHeadings.find((el) => el.getBoundingClientRect().width > 0) ||
+        possibleHeadings[0];
+      if (subjectDisplay) {
+        let textNodeUpdated = false;
+        Array.from(subjectDisplay.childNodes).forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
+            node.textContent = newSubject + ' ';
+            textNodeUpdated = true;
+          }
+        });
+        if (!textNodeUpdated && subjectDisplay.firstChild) {
+          subjectDisplay.firstChild.textContent = newSubject + ' ';
+        }
+      }
 
       console.log(`[Atlas Comet] Auto-rename concluído: "${newSubject}"`);
     } catch (error) {

@@ -697,6 +697,21 @@ export class ChatUIFactory {
 
         // ─── Show Success Toast (API Interception handles the rest) ────────
         this.showSuccessToast(overlay.querySelector('div'), overlay, selection);
+
+        // ─── Auto-submit the Chat Resolution Modal ─────────────────────────
+        // The user shouldn't have to manually click the submit button.
+        // We find the primary button in the footer and click it for them.
+        setTimeout(() => {
+          const footer = document.querySelector(CONSTANTS.SELECTORS.CHAT_RESOLUTION_FOOTER);
+          if (footer) {
+            // Find all primary buttons in the footer (usually "Resolver E Criar" is the last one)
+            const resolveBtns = Array.from(footer.querySelectorAll('button.nucleus-button--primary'));
+            const resolveBtn = resolveBtns[resolveBtns.length - 1] as HTMLButtonElement | undefined;
+            if (resolveBtn) {
+              resolveBtn.click();
+            }
+          }
+        }, 400); // Short delay to let the success toast animation start
       });
 
       container.appendChild(li);

@@ -69,6 +69,12 @@
       }
     }
     
+    // Prevent CSP spam for known broken Freshdesk telemetry endpoints.
+    // Since we wrap window.fetch, the browser blames our extension for Freshdesk's own CSP violations.
+    if (typeof url === 'string' && url.indexOf('rum.haystack.es') !== -1) {
+      return Promise.reject(new TypeError('Failed to fetch (Blocked by Atlas Comet to prevent CSP spam)'));
+    }
+
     // MUST apply to window context to prevent TypeError: Illegal invocation
     return originalFetch.apply(window, args);
   };

@@ -156,9 +156,18 @@ export class UIFactory {
     // Ensure the container is attached to the correct parent
     const possibleContainers = Array.from(
       document.querySelectorAll('.page-actions__left, .ticket-details-header .action-bar')
-    );
-    const topBarActionContainer = possibleContainers.find(el => el.getBoundingClientRect().width > 0) || possibleContainers[0];
-    
+    ) as HTMLElement[];
+
+    // Strict visibility check: ignores old Ember views kept in the DOM
+    const visibleContainers = possibleContainers.filter((el) => {
+      if (el.offsetParent === null) return false;
+      if (el.closest('.hide') !== null) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+
+    const topBarActionContainer = visibleContainers[0] || possibleContainers[0];
+
     if (topBarActionContainer && !topBarActionContainer.contains(container)) {
       topBarActionContainer.prepend(container);
     }

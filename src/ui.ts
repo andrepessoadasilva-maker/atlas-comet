@@ -160,8 +160,12 @@ export class UIFactory {
 
     // Strict visibility check: ignores old Ember views kept in the DOM
     const visibleContainers = possibleContainers.filter((el) => {
-      if (el.offsetParent === null) return false;
       if (el.closest('.hide') !== null) return false;
+      if (el.closest('[style*="display: none"]') !== null) return false;
+      
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+      
       const rect = el.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0;
     });
@@ -1924,9 +1928,13 @@ export class UIFactory {
       // Removed manual DOM mutation of the subject heading.
       // Mutating text nodes directly corrupts Ember's virtual DOM state,
       // causing Glimmer to crash when reloadTicketInEmber() is called.
-      // The title will be updated safely and naturally by Ember's reload below.
-      // Force Freshdesk to sync the UI by reloading the Ember Model
-      await FreshdeskAPI.reloadTicketInEmber(ticketId);
+      
+      // We also DO NOT call reloadTicketInEmber() here. 
+      // Since this flow can be delayed by up to 15 seconds (Plano C iframe),
+      // the agent might already be interacting with the ticket (typing a reply).
+      // Forcing a model reload while the agent is active causes Ember to crash, 
+      // destroying the page layout and hiding our buttons.
+      // The API update above is sufficient; the UI will update on the next natural refresh.
 
       console.log(`[Atlas Comet] Auto-rename concluído: "${newSubject}"`);
     } catch (error) {

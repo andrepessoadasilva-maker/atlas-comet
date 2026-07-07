@@ -1336,24 +1336,10 @@ export class UIFactory {
           // Mark as defined in this session to prevent the observer from re-triggering "Sim, Offline"
           AppState.getInstance().setServiceDefined(true);
 
-          // Update the UI title immediately for instant visual feedback (UX)
-          const subjectDisplay = document.querySelector('.ticket-subject-heading');
-          if (subjectDisplay) {
-            // Modifica apenas o valor do nó de texto existente para não perder a referência do SPA
-            let textNodeUpdated = false;
-            Array.from(subjectDisplay.childNodes).forEach((node) => {
-              if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
-                node.textContent = newSubject + ' ';
-                textNodeUpdated = true;
-              }
-            });
-
-            // Fallback de segurança absoluto (caso o Freshdesk limpe a div por algum motivo)
-            if (!textNodeUpdated && subjectDisplay.firstChild) {
-              subjectDisplay.firstChild.textContent = newSubject + ' ';
-            }
-          }
-
+          // Removed manual DOM mutation of the subject heading.
+          // Mutating text nodes directly corrupts Ember's virtual DOM state,
+          // causing Glimmer to crash when reloadTicketInEmber() is called.
+          // The title will be updated safely and naturally by Ember's reload below.
           // Remove the offline label and confirm button from the UI immediately
           this.removeOfflineLabel();
           const btnConfirm = document.getElementById('confirm-offline');
@@ -1926,23 +1912,10 @@ export class UIFactory {
       // Update subject silently via API (no service level changes)
       await FreshdeskAPI.updateTicketSubjectSilently(ticketId, newSubject, finalTags);
 
-      // Update the DOM visually for instant feedback (same pattern as manual flow)
-      const possibleHeadings = Array.from(document.querySelectorAll(CONSTANTS.VALUES.SUBJECT_HEADING_SELECTOR));
-      const subjectDisplay = possibleHeadings.find(el => el.getBoundingClientRect().width > 0) || possibleHeadings[0];
-      if (subjectDisplay) {
-        let textNodeUpdated = false;
-        Array.from(subjectDisplay.childNodes).forEach((node) => {
-          if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== '') {
-            node.textContent = newSubject + ' ';
-            textNodeUpdated = true;
-          }
-        });
-        // Fallback: update first child if no text node was found
-        if (!textNodeUpdated && subjectDisplay.firstChild) {
-          subjectDisplay.firstChild.textContent = newSubject + ' ';
-        }
-      }
-
+      // Removed manual DOM mutation of the subject heading.
+      // Mutating text nodes directly corrupts Ember's virtual DOM state,
+      // causing Glimmer to crash when reloadTicketInEmber() is called.
+      // The title will be updated safely and naturally by Ember's reload below.
       // Force Freshdesk to sync the UI by reloading the Ember Model
       await FreshdeskAPI.reloadTicketInEmber(ticketId);
 

@@ -126,10 +126,10 @@ export class NewTicketObserver {
     // On the new ticket page, the header contains a "Novo ticket" title and action buttons.
     // We look for multiple possible selectors since Freshdesk may vary across versions.
     const headerContainer =
+      document.querySelector('.page-title') ||
       document.querySelector('.page-actions__left') ||
       document.querySelector('.ticket-actions') ||
-      document.querySelector('.page-header__actions') ||
-      document.querySelector('.page-title');
+      document.querySelector('.page-header__actions');
 
     // Render the button — NewTicketUIFactory handles all positioning logic
     NewTicketUIFactory.renderNewTicketButton(headerContainer as HTMLElement | null);

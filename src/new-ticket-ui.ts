@@ -353,12 +353,19 @@ export class NewTicketUIFactory {
       if (contatoSearchTimeout) clearTimeout(contatoSearchTimeout);
       contatoSearchTimeout = setTimeout(async () => {
         try {
+          // Utiliza a API interna do Freshdesk que é a mesma utilizada pelo campo original
           const response = await fetch(
-            `/api/v2/contacts/autocomplete?term=${encodeURIComponent(query)}`,
+            `/api/_/contacts/autocomplete?term=${encodeURIComponent(query)}`,
           );
           if (!response.ok) return;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const contacts = (await response.json()) as any[];
+          let contacts = (await response.json()) as any[];
+
+          // A API interna pode retornar os contatos dentro de uma chave 'contacts' ou direto no array
+          if (!Array.isArray(contacts) && (contacts as unknown as Record<string, unknown>).contacts) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            contacts = (contacts as unknown as Record<string, unknown>).contacts as any[];
+          }
 
           while (contatoResultsContainer.firstChild)
             contatoResultsContainer.removeChild(contatoResultsContainer.firstChild);
@@ -420,49 +427,6 @@ export class NewTicketUIFactory {
 
     contatoWrapper.appendChild(contatoInput);
     contatoWrapper.appendChild(contatoResultsContainer);
-
-    // "Adicionar novo contato" and "Adicionar Cc" links
-    const contatoActions = document.createElement('div');
-    contatoActions.style.cssText = 'display: flex; gap: 16px; margin-top: 6px;';
-
-    const addNewContact = document.createElement('a');
-    addNewContact.style.cssText =
-      'font-size: 12px; color: #02ac85; cursor: pointer; text-decoration: none;';
-    addNewContact.textContent = 'Adicionar novo contato';
-    addNewContact.addEventListener('click', () => {
-      // Click the native Freshdesk "Adicionar novo contato" link
-      const nativeLink = document.querySelector<HTMLElement>(
-        'a[data-test-id="add-new-requester"], .add-new-requester, a.new-requester-link',
-      );
-      if (nativeLink) {
-        overlay.remove();
-        nativeLink.click();
-      }
-    });
-
-    const addCc = document.createElement('a');
-    addCc.style.cssText =
-      'font-size: 12px; color: #02ac85; cursor: pointer; text-decoration: none;';
-    addCc.textContent = 'Adicionar Cc';
-    addCc.addEventListener('click', () => {
-      // Click the native Freshdesk "Adicionar Cc" link
-      const nativeCcLink = document.querySelector<HTMLElement>(
-        'a[data-test-id="add-cc"], .add-cc-link',
-      );
-      if (nativeCcLink) {
-        overlay.remove();
-        nativeCcLink.click();
-      }
-    });
-
-    contatoActions.appendChild(addNewContact);
-    const separator = document.createElement('span');
-    separator.style.cssText = 'color: #ccc; font-size: 12px;';
-    separator.textContent = '|';
-    contatoActions.appendChild(separator);
-    contatoActions.appendChild(addCc);
-    contatoWrapper.appendChild(contatoActions);
-
     formContainer.appendChild(contatoWrapper);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -742,10 +706,32 @@ export class NewTicketUIFactory {
         const sortedParents = [...(entry.parents || [])].sort((a, b) => a.level - b.level);
         if (sortedParents.length > 0) {
           const n1Label = sortedParents[0].label;
+
+          const n1Lower = n1Label
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
+          let badgeBg = '#f0f0f0';
+          let badgeColor = '#666';
+
+          if (n1Lower.includes('cv prospectar')) {
+            badgeBg = '#fde8e8';
+            badgeColor = '#b91c1c';
+          } else if (n1Lower.includes('cv gerenciar')) {
+            badgeBg = '#FFF9C4';
+            badgeColor = '#827717';
+          } else if (n1Lower.includes('cv vender')) {
+            badgeBg = '#d1fae5';
+            badgeColor = '#065f46';
+          } else if (n1Lower.includes('cv relacionar')) {
+            badgeBg = '#dbeafe';
+            badgeColor = '#1e40af';
+          }
+
           const badge = document.createElement('span');
           badge.style.cssText = `
             display: inline-block; font-size: 10px; font-weight: 600;
-            color: #666; background: #f0f0f0;
+            color: ${badgeColor}; background: ${badgeBg};
             padding: 2px 6px; border-radius: 4px;
             text-transform: uppercase; white-space: nowrap;
           `;
@@ -918,11 +904,11 @@ export class NewTicketUIFactory {
       agenteSelect.appendChild(loadingOpt);
 
       try {
-        // Fetch agents for this group using the bootstrap data
-        const response = await fetch('/api/_/bootstrap/agents_groups');
+        // Fetch agents for this specific group using the official v2 API
+        const response = await fetch(`/api/v2/agents?group_id=${groupId}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = (await response.json()) as any;
+        const agents = (await response.json()) as any[];
 
         while (agenteSelect.firstChild) agenteSelect.removeChild(agenteSelect.firstChild);
 
@@ -931,17 +917,8 @@ export class NewTicketUIFactory {
         emptyOpt.textContent = '-- Selecionar Agente --';
         agenteSelect.appendChild(emptyOpt);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const agents = (data.agents || []) as any[];
-        // Filter agents by group membership
-        const groupAgents = agents.filter(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (agent: any) =>
-            agent.group_ids && agent.group_ids.includes(Number(groupId)),
-        );
-
         // Sort agents alphabetically by name
-        groupAgents.sort(
+        agents.sort(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (a: any, b: any) => {
             const nameA = (a.contact?.name || a.name || '').toLowerCase();
@@ -950,7 +927,7 @@ export class NewTicketUIFactory {
           },
         );
 
-        for (const agent of groupAgents) {
+        for (const agent of agents) {
           const opt = document.createElement('option');
           opt.value = String(agent.id);
           opt.textContent = agent.contact?.name || agent.name || `Agente #${agent.id}`;
@@ -1244,10 +1221,11 @@ export class NewTicketUIFactory {
    */
   private static async loadGroups(grupoSelect: HTMLSelectElement): Promise<void> {
     try {
-      const response = await fetch('/api/_/bootstrap/agents_groups');
+      // Use the official v2 API to list groups
+      const response = await fetch('/api/v2/groups');
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = (await response.json()) as any;
+      const groups = (await response.json()) as any[];
 
       while (grupoSelect.firstChild) grupoSelect.removeChild(grupoSelect.firstChild);
 
@@ -1255,9 +1233,6 @@ export class NewTicketUIFactory {
       emptyOpt.value = '';
       emptyOpt.textContent = '-- Selecionar Grupo --';
       grupoSelect.appendChild(emptyOpt);
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const groups = (data.groups || []) as any[];
       // Sort groups alphabetically
       groups.sort(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

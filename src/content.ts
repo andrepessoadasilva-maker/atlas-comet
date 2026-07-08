@@ -1,6 +1,6 @@
 import { AppState } from './state';
 import { TicketObserver } from './observer';
-import { ChatObserver } from './chat-observer';
+import { NewTicketObserver } from './new-ticket-observer';
 import { CONSTANTS } from './constants';
 import { ContextManager } from './context';
 
@@ -19,25 +19,23 @@ console.debug = noop;
  * Bootstraps the application within the isolated world of the webpage.
  * It manages the lifecycle of the extension by listening to navigation events
  * (from the background script and local window events) and coordinating
- * the observation of Freshdesk tickets AND chat conversations.
+ * the observation of Freshdesk tickets and the New Ticket page.
  *
  * Routes:
+ * - `/a/tickets/new` → NewTicketObserver (new ticket creation form)
  * - `/a/tickets/{id}` → TicketObserver (existing service definition flow)
- * - `/crm/messaging/.../conversation/{id}` → ChatObserver (new chat service flow)
  * - Any other URL → disconnects all observers to save resources
  */
 class ExtensionController {
   private appState: AppState;
   private ticketObserver: TicketObserver;
-  private chatObserver: ChatObserver;
+  private newTicketObserver: NewTicketObserver;
   private currentSessionTicketId: string | null = null;
-  /** Tracks the active conversation ID to detect SPA transitions between chats */
-  private currentSessionConversationId: string | null = null;
 
   constructor() {
     this.appState = AppState.getInstance();
     this.ticketObserver = new TicketObserver();
-    this.chatObserver = new ChatObserver();
+    this.newTicketObserver = new NewTicketObserver();
   }
 
   /**
@@ -60,11 +58,9 @@ class ExtensionController {
       if (!ContextManager.isValid()) return;
       if (message.type === CONSTANTS.EVENTS.NAVIGATED) {
         // CRITICAL GUARD: The background script fires onHistoryStateUpdated for ALL
-        // frames in the tab, including our hidden Plano C scraping iframe. When that
-        // iframe navigates to /crm/messaging/..., the background sends a NAVIGATED
-        // message with a messaging URL. Without this guard, handleRouting() would
-        // interpret it as the user leaving the ticket page and disconnect the
-        // TicketObserver, destroying all injected buttons.
+        // frames in the tab. Without this guard, handleRouting() would
+        // interpret iframe navigations as user navigations and destroy the
+        // current observer state.
         //
         // Fix: Only act on NAVIGATED messages that match the actual top-level window
         // URL. If the message URL differs from window.location.href, it came from
@@ -72,7 +68,7 @@ class ExtensionController {
         const messageUrl = new URL(message.url);
         const currentUrl = new URL(window.location.href);
         if (messageUrl.pathname !== currentUrl.pathname) {
-          // This navigation happened in a sub-frame (e.g., Plano C iframe), not
+          // This navigation happened in a sub-frame, not
           // the main window. Ignore it to preserve the current observer state.
           return;
         }
@@ -90,24 +86,32 @@ class ExtensionController {
   /**
    * Evaluates the current URL to decide if observation is required.
    * Routes to the appropriate observer based on the URL pattern:
-   * - Ticket pages → TicketObserver
-   * - Messaging pages → ChatObserver
+   * - New Ticket page → NewTicketObserver
+   * - Existing Ticket pages → TicketObserver
    * - Other pages → disconnect all observers
    *
-   * Tracks transitions between tickets/conversations to clean up state.
+   * IMPORTANT: The `/a/tickets/new` route MUST be checked BEFORE the
+   * `/a/tickets/{id}` route, because the regex for numeric ticket IDs
+   * would NOT match "new", but we need a clean separation.
    *
    * @param url - The current full URL of the browser window.
    */
   private handleRouting(url: string): void {
+    const isNewTicket = this.appState.isNewTicketUrl(url);
     const ticketId = this.appState.extractTicketIdFromUrl(url);
-    const conversationId = this.appState.extractConversationIdFromUrl(url);
-    const isMessaging = this.appState.isMessagingUrl(url);
 
-    // ─── Route 1: Ticket Page (/a/tickets/{id}) ──────────────────────────────
+    // ─── Route 1: New Ticket Page (/a/tickets/new) ───────────────────────
+    if (isNewTicket) {
+      this.ticketObserver.disconnect();
+      this.currentSessionTicketId = null;
+      this.appState.clearProcessedTicket();
+      this.newTicketObserver.startObserving();
+      return;
+    }
+
+    // ─── Route 2: Existing Ticket Page (/a/tickets/{id}) ─────────────────
     if (ticketId) {
-      // Disconnect chat observer if we came from messaging
-      this.chatObserver.disconnect();
-      this.currentSessionConversationId = null;
+      this.newTicketObserver.disconnect();
 
       // Track ticket transitions
       if (this.currentSessionTicketId !== ticketId) {
@@ -118,103 +122,21 @@ class ExtensionController {
       return;
     }
 
-    // ─── Route 2: Messaging Page (/crm/messaging/.../conversation/{id}) ──────
-    if (isMessaging && conversationId) {
-      // Disconnect ticket observer if we came from a ticket
-      this.ticketObserver.disconnect();
-      this.currentSessionTicketId = null;
-      this.appState.clearProcessedTicket();
-
-      // Track conversation transitions
-      if (this.currentSessionConversationId !== conversationId) {
-        this.currentSessionConversationId = conversationId;
-      }
-      this.chatObserver.startObserving(conversationId);
-      return;
-    }
-
-    // ─── Route 3: Messaging Page without specific conversation ───────────────
-    // User is on the inbox view but hasn't selected a conversation yet.
-    // Keep the chat observer running if it was already active (the agent may
-    // be switching between conversations in the SPA), otherwise disconnect.
-    if (isMessaging && !conversationId) {
-      this.ticketObserver.disconnect();
-      this.currentSessionTicketId = null;
-      this.appState.clearProcessedTicket();
-      // Don't disconnect chat observer — the conversation panel might still be visible
-      return;
-    }
-
-    // ─── Route 4: No matching page — disconnect everything ───────────────────
+    // ─── Route 3: No matching page — disconnect everything ───────────────
     this.ticketObserver.disconnect();
-    this.chatObserver.disconnect();
+    this.newTicketObserver.disconnect();
     this.currentSessionTicketId = null;
-    this.currentSessionConversationId = null;
     this.appState.clearProcessedTicket();
   }
 }
 
 // ==========================================
-// BOOTSTRAP INTERCEPTION (IFRAME INCEPTION)
+// NORMAL EXECUTION (MAIN WINDOW)
 // ==========================================
-
-// Verifica se estamos rodando DENTRO de um iframe oculto do Team Inbox (Plano C)
-if (window !== window.parent && window.location.href.includes('/crm/messaging/')) {
-  // --- INÍCIO DO SCRAPING INVISÍVEL ---
-
-  // Função para extrair a empresa do DOM do SPA
-  const extractCompany = (): string | null => {
-    const detailLink = document.querySelector('.message-detail-link a');
-    if (detailLink && detailLink.textContent?.trim()) {
-      const fullText = detailLink.textContent.trim();
-      if (fullText.includes('-')) return fullText.split('-')[0].trim();
-    }
-
-    const tooltipSpan = document.querySelector('.message-detail-link span[data-original-title]');
-    if (tooltipSpan) {
-      const titleAttr = tooltipSpan.getAttribute('data-original-title') || '';
-      if (titleAttr.includes('-')) return titleAttr.split('-')[0].trim();
-    }
-
-    const messageDetail = document.querySelector('.message-detail-link');
-    if (messageDetail && messageDetail.textContent?.trim()) {
-      const fullText = messageDetail.textContent.trim();
-      if (fullText.includes('-')) return fullText.split('-')[0].trim();
-    }
-    return null;
-  };
-
-  // Tenta extrair imediatamente
-  let company = extractCompany();
-  if (company) {
-    window.parent.postMessage({ type: 'ATLAS_COMET_TEAM_INBOX_RESULT', companyName: company }, '*');
-  } else {
-    // Se não encontrou, usa MutationObserver para aguardar o SPA renderizar (limite de 10s)
-    const observer = new MutationObserver((mutations, obs) => {
-      company = extractCompany();
-      if (company) {
-        obs.disconnect();
-        window.parent.postMessage(
-          { type: 'ATLAS_COMET_TEAM_INBOX_RESULT', companyName: company },
-          '*',
-        );
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    setTimeout(() => {
-      observer.disconnect();
-      // Não posta nada, o timeout de 15s no parent resolverá o caso de erro
-    }, 10000);
-  }
-
-  // HALT: Impede o carregamento da extensão completa dentro do Iframe
-} else {
-  // ==========================================
-  // NORMAL EXECUTION (MAIN WINDOW)
-  // ==========================================
-  const controller = new ExtensionController();
-  controller.init();
-}
+// Note: The iframe scraping for Team Inbox (Plano C) was removed along
+// with the Chat functionality. The identity resolution in ui.ts still
+// uses its own inline iframe approach when needed.
+const controller = new ExtensionController();
+controller.init();
 
 

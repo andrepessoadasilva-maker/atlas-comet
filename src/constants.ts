@@ -9,6 +9,8 @@
 export const CONSTANTS = {
   // DOM IDs
   MODAL_ID: 'modal-alerta-tabulacao',
+  /** ID for the New Ticket modal overlay */
+  NEW_TICKET_MODAL_ID: 'atlas-comet-new-ticket-modal',
 
   // DOM Selectors
   SELECTORS: {
@@ -29,26 +31,16 @@ export const CONSTANTS = {
     /** Container where Freshdesk renders the "Refresh properties" link after a websocket update */
     REFRESH_BANNER: '.ticket-sidebar-sticky__refresh-text',
 
-    // ─── Chat / Messaging Interface Selectors ──────────────────────────────
+    // ─── New Ticket Page Selectors ──────────────────────────────────────
     /**
-     * Resolve/Close button selectors in the Freshdesk Messaging interface.
-     * Used to detect when the agent is about to finalize a conversation.
+     * The native "Criar" submit button on the /a/tickets/new page.
+     * Matches: <button data-test-id="submit" id="send-and-set" class="btn btn--primary ...">
      */
-    CHAT_RESOLVE_BUTTON: [
-      'button[data-test-id="resolve-conversation"]',
-      'fw-button[data-test-id="resolve-conversation"]',
-      'button[data-test-id="resolve"]',
-      '.resolve-btn',
-      'button.resolve-conversation',
-    ] as readonly string[],
-    /** Container of the resolution modal (the sidebar that slides in to create a ticket) */
-    CHAT_RESOLUTION_MODAL: '.nucleus-modal__dialog',
-    /** Footer of the resolution modal where the 'Cancel' and 'Resolver e criar' buttons live */
-    CHAT_RESOLUTION_FOOTER: '.nucleus-modal__footer',
-    /** 
-     * The form element containing the 'Tipo', 'Serviço Nível 1', etc fields.
+    NEW_TICKET_SUBMIT: 'button[data-test-id="submit"]#send-and-set',
+    /**
+     * The form container on the new ticket page that holds all input fields.
      */
-    CHAT_TICKET_FORM: '.fd-ticket-form',
+    NEW_TICKET_FORM: '.new-ticket-form, .ticket-create-form, form[data-test-id="new-ticket-form"]',
   },
 
   // Extension Messaging Events
@@ -76,8 +68,25 @@ export const CONSTANTS = {
     CHAT_SUBJECT_KEYWORDS: ['CONVERSA', 'CHAT'] as readonly string[],
     /** CSS selector for the ticket subject heading element in Freshdesk's DOM */
     SUBJECT_HEADING_SELECTOR: '.ticket-subject-heading',
-    /** chrome.storage.local key used to persist the selected service for an active chat session */
-    CHAT_SERVICE_STORAGE_KEY: 'atlas_chat_service_selection',
+
+    // ─── New Ticket Page Defaults ─────────────────────────────────────
+    /** Default value for the "Origem" field on the New Ticket form */
+    DEFAULT_ORIGEM: 'Interno',
+    /** Default value for the "Status" field on the New Ticket form */
+    DEFAULT_STATUS: 'Aberto',
+    /** Default value for the "Prioridade" field on the New Ticket form */
+    DEFAULT_PRIORIDADE: 'Baixa',
+    /** Default value for the "Produto" field on the New Ticket form */
+    DEFAULT_PRODUTO: 'CV CRM',
+
+    /** Status options for the New Ticket form */
+    STATUS_OPTIONS: ['Aberto', 'Em atendimento', 'Pendente', 'Resolvido', 'Fechado'] as readonly string[],
+    /** Priority options for the New Ticket form */
+    PRIORIDADE_OPTIONS: ['Baixa', 'Média', 'Alta', 'Urgente'] as readonly string[],
+    /** Product options for the New Ticket form */
+    PRODUTO_OPTIONS: ['CV CRM', 'Anapro', 'Avendre'] as readonly string[],
+    /** Origin options for the New Ticket form */
+    ORIGEM_OPTIONS: ['Telefone', 'E-mail', 'Portal', 'Fórum', 'Chat', 'Interno', 'Observação', 'Feedback'] as readonly string[],
   },
 
   // Freshdesk Internal API Endpoints
@@ -89,8 +98,8 @@ export const CONSTANTS = {
   // URL Patterns
   URL: {
     TICKETS_PATH: '/a/tickets/',
-    /** Base path segment that identifies the Freshdesk Messaging (chat) interface */
-    MESSAGING_PATH: '/crm/messaging/',
+    /** Full path for the New Ticket creation form */
+    NEW_TICKET_PATH: '/a/tickets/new',
     /**
      * List of host suffixes where the extension is active.
      * Used by the background script's webNavigation filter to detect SPA transitions.
@@ -102,6 +111,31 @@ export const CONSTANTS = {
       'ajuda.cvcrm.com.br',
       'ajuda.anapro.com.br',
     ] as readonly string[],
+  },
+
+  // ─── Storage Keys (New Ticket — Independent from Ticket Modal) ────────
+  /**
+   * Chrome.storage.local keys for persisting new ticket modal preferences.
+   * These are INDEPENDENT from the ticket modal preferences to allow
+   * different defaults on each screen.
+   */
+  STORAGE: {
+    /** Saved "Origem" preference for the New Ticket modal */
+    NEW_TICKET_ORIGEM: 'atlas_newticket_origem_pref',
+    /** Saved "Tipo" preference for the New Ticket modal */
+    NEW_TICKET_TIPO: 'atlas_newticket_tipo_pref',
+    /** Saved "Status" preference for the New Ticket modal */
+    NEW_TICKET_STATUS: 'atlas_newticket_status_pref',
+    /** Saved "Prioridade" preference for the New Ticket modal */
+    NEW_TICKET_PRIORIDADE: 'atlas_newticket_prioridade_pref',
+    /** Saved "Grupo" preference for the New Ticket modal (stores { id, name }) */
+    NEW_TICKET_GRUPO: 'atlas_newticket_grupo_pref',
+    /** Saved "Agente" preference for the New Ticket modal (stores { id, name }) */
+    NEW_TICKET_AGENTE: 'atlas_newticket_agente_pref',
+    /** Saved "Produto" preference for the New Ticket modal */
+    NEW_TICKET_PRODUTO: 'atlas_newticket_produto_pref',
+    /** Saved service level filter preferences for the New Ticket modal */
+    NEW_TICKET_LEVEL_PREFS: 'atlas_newticket_level_prefs',
   },
 };
 

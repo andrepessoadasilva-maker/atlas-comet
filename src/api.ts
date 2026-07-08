@@ -431,9 +431,9 @@ export class FreshdeskAPI {
    * Creates a new ticket via Freshdesk's internal JSON API.
    *
    * Purpose:
-   * Used by the Clone Ticket feature to create a duplicate ticket with the same
-   * metadata (subject, type, status, priority, tags, group, agent, product,
-   * custom_fields, and requester_id) as the source ticket.
+   * Used by the New Ticket modal to create a ticket with all fields pre-filled
+   * by the agent (subject, type, status, priority, group, agent, product,
+   * custom_fields including service levels, and requester_id).
    *
    * The bridge handles CSRF token injection and cookie attachment automatically.
    *

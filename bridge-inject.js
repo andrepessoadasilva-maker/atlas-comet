@@ -214,24 +214,54 @@
 
     try {
       var parsedUrl = new URL(url, window.location.origin);
-      if (!parsedUrl.pathname.match(/^(\/api\/_\/tickets(\/\d+(\/update_properties)?)?|\/api\/(v2|_)\/ticket_fields)$/)) {
+      
+      // Intercept special internal memory extraction request
+      if (parsedUrl.pathname === '/atlas-comet/extract-memory') {
+        var memData = { groups: [], agents: [] };
+        try {
+          // Simple, single plan: search window for all groups and agents
+          var possibleGroups = [];
+          var possibleAgents = [];
+          
+          if (typeof window.gon !== 'undefined') {
+            if (window.gon.all_groups) possibleGroups = possibleGroups.concat(window.gon.all_groups);
+            if (window.gon.groups) possibleGroups = possibleGroups.concat(window.gon.groups);
+            if (window.gon.agents) possibleAgents = possibleAgents.concat(window.gon.agents);
+            if (window.gon.all_agents) possibleAgents = possibleAgents.concat(window.gon.all_agents);
+            if (window.gon.group_agents) possibleAgents = possibleAgents.concat(window.gon.group_agents);
+            if (window.gon.ticket_agents) possibleAgents = possibleAgents.concat(window.gon.ticket_agents);
+          }
+          if (typeof window.Mink !== 'undefined' && window.Mink.data) {
+            if (window.Mink.data.groups) possibleGroups = possibleGroups.concat(window.Mink.data.groups);
+            if (window.Mink.data.all_groups) possibleGroups = possibleGroups.concat(window.Mink.data.all_groups);
+            if (window.Mink.data.agents) possibleAgents = possibleAgents.concat(window.Mink.data.agents);
+            if (window.Mink.data.all_agents) possibleAgents = possibleAgents.concat(window.Mink.data.all_agents);
+          }
+
+          memData.groups = possibleGroups;
+          memData.agents = possibleAgents;
+        } catch (e) {
+          console.error('[Atlas Comet Bridge] Erro extraindo memoria:', e);
+        }
+        
+        sendResponse(requestId, true, 200, memData);
+        return;
+      }
+      
+      if (!parsedUrl.pathname.match(/^(\/api\/_\/tickets(\/\d+(\/update_properties)?)?|\/api\/(v2|_)\/ticket_fields|\/api\/(v2|_)\/contacts\/autocomplete|\/api\/_\/search\/autocomplete\/requesters|\/api\/_\/bootstrap\/agents_groups|\/api\/(v2|_)\/(groups|agents))$/)) {
         console.error('[Atlas Comet Bridge] ❌ Unauthorized API endpoint requested:', url);
         return;
       }
-      url = parsedUrl.pathname;
+      url = parsedUrl.pathname + parsedUrl.search;
     } catch (e) {
       console.error('[Atlas Comet Bridge] ❌ Invalid URL format:', url);
       return;
     }
 
-    /* GET requests typically don't need CSRF tokens in Freshdesk internal API */
-    if (method === 'GET') {
-      executeRequest(null);
-    } else {
-      fetchCsrfToken().then(function(csrfToken) {
-        executeRequest(csrfToken);
-      });
-    }
+    /* Always pass CSRF token to prevent 403 on internal APIs */
+    fetchCsrfToken().then(function(csrfToken) {
+      executeRequest(csrfToken);
+    });
 
     function executeRequest(csrfToken) {
       var headers = {};

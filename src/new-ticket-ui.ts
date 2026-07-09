@@ -1365,7 +1365,56 @@ export class NewTicketUIFactory {
 
       // Only add optional fields if set
       if (formData.grupoId) payload.group_id = Number(formData.grupoId);
-      if (formData.agenteId) payload.responder_id = Number(formData.agenteId);
+      if (formData.agenteId) {
+        let responderId = Number(formData.agenteId);
+        
+        // Na API _/tickets (V1), o responder_id DEVE ser o ID de Contato (User ID).
+        // Como o DOM ou o gon.agents geralmente tem apenas o Agent ID ou um index falso (1, 2, 3),
+        // NÓS SEMPRE buscamos o User ID pelo Autocomplete usando o nome do agente!
+        if (formData.agenteName) {
+          console.error(`[Atlas Comet DEBUG] Buscando User ID definitivo para: ${formData.agenteName}`);
+          try {
+            const reqRes = await FreshdeskAPI.sendBridgeRequest(
+              `/api/_/search/autocomplete/requesters`,
+              'POST',
+              JSON.stringify({ term: formData.agenteName })
+            );
+            
+            let reqList: any[] = [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (!Array.isArray(reqRes) && (reqRes as any).contacts) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              reqList = (reqRes as any).contacts;
+            } else if (!Array.isArray(reqRes) && reqRes && typeof reqRes === 'object') {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              reqList = (Object.values(reqRes).find(val => Array.isArray(val)) as any[]) || [];
+            } else if (Array.isArray(reqRes)) {
+              reqList = reqRes;
+            }
+            
+            console.error(`[Atlas Comet DEBUG] Autocomplete retornou array com ${reqList.length} itens. Lista:`, reqList);
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const exactMatch = reqList.find((r: any) => {
+              if (!r.name) return false;
+              const n1 = r.name.trim().toLowerCase();
+              const n2 = formData.agenteName.trim().toLowerCase();
+              return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+            });
+            
+            if (exactMatch && exactMatch.id) {
+              responderId = exactMatch.id;
+              console.error(`[Atlas Comet DEBUG] Agente mapeado via autocomplete: ID ${responderId}`);
+            } else {
+              console.error(`[Atlas Comet DEBUG] NENHUM MATCH EXATO ENCONTRADO para ${formData.agenteName}`);
+            }
+          } catch (e) {
+            console.error('[Atlas Comet DEBUG] Falha no autocomplete requesters:', e);
+          }
+        }
+        
+        payload.responder_id = responderId;
+      }
 
       // Map product name to product_id
       // We'll try to find the product ID from the page's prefetched data
@@ -1388,7 +1437,7 @@ export class NewTicketUIFactory {
         }
       }
 
-      console.log('[Atlas Comet] New Ticket payload:', JSON.stringify(payload, null, 2));
+      console.error('[Atlas Comet DEBUG] PAYLOAD DO TICKET:', JSON.stringify(payload, null, 2));
 
       // ─── Create the ticket via API Bridge ──────────────────────────────
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

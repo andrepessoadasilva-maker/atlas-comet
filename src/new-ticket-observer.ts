@@ -120,19 +120,21 @@ export class NewTicketObserver {
 
     // Check if our button container already exists
     const buttonsExist = document.getElementById('atlas-comet-newticket-buttons');
-    if (buttonsExist) return; // Already injected, nothing to do
+    if (!buttonsExist) {
+      // Look for the page header area to inject the button.
+      // On the new ticket page, the header contains a "Novo ticket" title and action buttons.
+      // We look for multiple possible selectors since Freshdesk may vary across versions.
+      const headerContainer =
+        document.querySelector('[data-test-title="main-title"]') ||
+        document.querySelector('.breadcrumb-title') ||
+        document.querySelector('.page-title') ||
+        document.querySelector('.page-actions__left') ||
+        document.querySelector('.ticket-actions') ||
+        document.querySelector('.page-header__actions');
 
-    // Look for the page header area to inject the button.
-    // On the new ticket page, the header contains a "Novo ticket" title and action buttons.
-    // We look for multiple possible selectors since Freshdesk may vary across versions.
-    const headerContainer =
-      document.querySelector('.page-title') ||
-      document.querySelector('.page-actions__left') ||
-      document.querySelector('.ticket-actions') ||
-      document.querySelector('.page-header__actions');
-
-    // Render the button — NewTicketUIFactory handles all positioning logic
-    NewTicketUIFactory.renderNewTicketButton(headerContainer as HTMLElement | null);
+      // Render the button — NewTicketUIFactory handles all positioning logic
+      NewTicketUIFactory.renderNewTicketButton(headerContainer as HTMLElement | null);
+    }
   }
 }
 

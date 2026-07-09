@@ -38,6 +38,9 @@ export interface TipoEntry {
 
 let lookupMap: Map<number, LookupEntry> = new Map();
 let tipoList: TipoEntry[] = [];
+let groupList: { id: number; name: string }[] = [];
+// eslint-disable-next-line prefer-const
+let productList: { id: number; name: string }[] = [];
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
 
@@ -51,6 +54,27 @@ export class LookupService {
     return tipoList;
   }
 
+  public static getAllProducts(): { id: number; name: string }[] {
+    return productList;
+  }
+
+  public static getAllGroups(): { id: number; name: string }[] {
+    if (groupList.length > 0) return groupList;
+
+    // Fallback: Tenta extrair do select nativo se estiver na página
+    const domGroups: { id: number; name: string }[] = [];
+    const select = document.querySelector('select[name="helpdesk_ticket[group_id]"], select#helpdesk_ticket_group_id, select.group_id');
+    if (select && select instanceof HTMLSelectElement) {
+      console.log('[Atlas Comet] Grupos extraídos via DOM select fallback');
+      for (const opt of Array.from(select.options)) {
+        if (opt.value && opt.value.trim() !== '') {
+          domGroups.push({ id: Number(opt.value), name: opt.textContent?.trim() || `Grupo #${opt.value}` });
+        }
+      }
+    }
+    return domGroups;
+  }
+
   /**
    * Initializes the LookupService by loading fields from local cache or
    * fetching them from the Freshdesk API.
@@ -62,9 +86,9 @@ export class LookupService {
     initPromise = (async () => {
       try {
         if (!force) {
-          const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[] } | null;
+          const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[]; products: { id: number; name: string }[] } | null;
           if (cached && !this.isCacheExpired(cached.timestamp)) {
-            this.buildMapFromCache(cached.lookup, cached.tipos);
+            this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || [], cached.products || []);
             isInitialized = true;
             return;
           }
@@ -81,12 +105,11 @@ export class LookupService {
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('[Atlas Comet] Erro ao inicializar LookupService:', error);
-        // Fallback: If fetch fails, try to load from cache even if expired
-        const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[] } | null;
+        const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[]; products: { id: number; name: string }[] } | null;
         if (cached) {
           // eslint-disable-next-line no-console
           console.log('[Atlas Comet] Usando cache expirado devido a falha na API.');
-          this.buildMapFromCache(cached.lookup, cached.tipos);
+          this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || [], cached.products || []);
           isInitialized = true;
         } else {
           throw error;
@@ -107,6 +130,7 @@ export class LookupService {
   private static parseFields(response: unknown): void {
     lookupMap.clear();
     tipoList = [];
+    groupList = [];
     this.cachedLeaves = null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,6 +165,64 @@ export class LookupService {
             id: c.id || 0,
             choice_id: c.id || 0,
           });
+        }
+      }
+    }
+
+    // Parse Groups
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const groupField = fieldsArray.find((f: any) => f.name === 'group_id' || f.name === 'group');
+    if (groupField && groupField.choices) {
+      console.log('[Atlas Comet] Estrutura do groupField:', groupField);
+      
+      const choices = groupField.choices;
+      
+      if (Array.isArray(choices)) {
+        for (const c of choices) {
+          if (Array.isArray(c) && c.length >= 2) {
+            // Format: [["Support", 1234], ["Sales", 5678]]
+            const name = typeof c[0] === 'string' ? c[0] : String(c[0]);
+            const id = typeof c[1] === 'number' ? c[1] : parseInt(String(c[1]), 10);
+            if (id) groupList.push({ id, name });
+          } else if (c && typeof c === 'object') {
+            // Format: [{"id": 1234, "value": "Support"}]
+            const id = c.id || c.value || c.choice_id;
+            const name = c.value || c.label || c.name || `Grupo #${id}`;
+            if (id) groupList.push({ id: Number(id), name: String(name) });
+          }
+        }
+      } else if (typeof choices === 'object') {
+        // Format: {"Support": 1234, "Sales": 5678}
+        for (const [key, val] of Object.entries(choices)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const id = typeof val === 'number' ? val : (val as any).id || parseInt(String(val), 10);
+          if (id) groupList.push({ id, name: key });
+        }
+      }
+    }
+
+    // Parse Products
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const productField = fieldsArray.find((f: any) => f.name === 'product_id' || f.name === 'product');
+    if (productField && productField.choices) {
+      const choices = productField.choices;
+      if (Array.isArray(choices)) {
+        for (const c of choices) {
+          if (Array.isArray(c) && c.length >= 2) {
+            const name = typeof c[0] === 'string' ? c[0] : String(c[0]);
+            const id = typeof c[1] === 'number' ? c[1] : parseInt(String(c[1]), 10);
+            if (id) productList.push({ id, name });
+          } else if (c && typeof c === 'object') {
+            const id = c.id || c.value || c.choice_id;
+            const name = c.value || c.label || c.name || `Produto #${id}`;
+            if (id) productList.push({ id: Number(id), name: String(name) });
+          }
+        }
+      } else if (typeof choices === 'object') {
+        for (const [key, val] of Object.entries(choices)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const id = typeof val === 'number' ? val : (val as any).id || parseInt(String(val), 10);
+          if (id) productList.push({ id, name: key });
         }
       }
     }
@@ -251,6 +333,7 @@ export class LookupService {
       timestamp: Date.now(),
       lookup: lookupArray,
       tipos: tipoList,
+      groups: groupList,
     };
     return new Promise((resolve) => {
       chrome.storage.local.set({ atlas_fields_cache_v2: cacheData }, resolve);
@@ -262,9 +345,14 @@ export class LookupService {
     return Date.now() - timestamp > CACHE_TTL_MS;
   }
 
-  private static buildMapFromCache(lookupArray: [number, LookupEntry][], tipos: TipoEntry[]): void {
-    lookupMap = new Map(lookupArray);
-    tipoList = tipos;
+  private static buildMapFromCache(
+    cachedLookup: [number, LookupEntry][],
+    cachedTipos: TipoEntry[],
+    cachedGroups: { id: number; name: string }[],
+  ): void {
+    lookupMap = new Map(cachedLookup);
+    tipoList = cachedTipos || [];
+    groupList = cachedGroups || [];
     this.cachedLeaves = null;
   }
 

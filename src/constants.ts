@@ -86,7 +86,7 @@ export const CONSTANTS = {
     /** Product options for the New Ticket form */
     PRODUTO_OPTIONS: ['CV CRM', 'Anapro', 'Avendre'] as readonly string[],
     /** Origin options for the New Ticket form */
-    ORIGEM_OPTIONS: ['Telefone', 'E-mail', 'Portal', 'Fórum', 'Chat', 'Interno', 'Observação', 'Feedback'] as readonly string[],
+    ORIGEM_OPTIONS: ['Interno', 'Telefone', 'Attemics'] as readonly string[],
   },
 
   // Freshdesk Internal API Endpoints

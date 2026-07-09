@@ -923,27 +923,12 @@ export class NewTicketUIFactory {
 
       const loadingOpt = document.createElement('option');
       loadingOpt.value = '';
-      loadingOpt.textContent = 'Sincronizando agentes...';
+      loadingOpt.textContent = 'Buscando agentes...';
       agenteSelect.appendChild(loadingOpt);
 
       try {
-        console.log(`[Atlas Comet] Sincronizando grupo selecionado com o nativo: ${groupName}`);
+        console.log(`[Atlas Comet] Buscando agentes para o grupo: ${groupName} (ID: ${groupId})`);
         
-        // 1. Sincronizar o dropdown nativo de grupos
-        if (groupName) {
-          const synced = await this.selectInNativeDropdown('group', groupName);
-          if (synced) {
-            console.log('[Atlas Comet] Grupo nativo atualizado com sucesso.');
-            await new Promise(r => setTimeout(r, 400)); // Esperar Freshdesk carregar os agentes
-          } else {
-            console.warn('[Atlas Comet] Não foi possível encontrar o grupo no dropdown nativo.');
-          }
-        }
-
-        // 2. Extrair agentes do dropdown nativo
-        const domAgents = await this.extractFromNativeDropdown('agent');
-
-        // 3. Buscar IDs reais pela API (opcional, apenas para obter IDs reais)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let realAgents: any[] = [];
         try {
@@ -961,19 +946,15 @@ export class NewTicketUIFactory {
         emptyOpt.textContent = '-- Selecionar Agente --';
         agenteSelect.appendChild(emptyOpt);
 
-        if (domAgents.length === 0) {
-          console.warn('[Atlas Comet] Nenhum agente encontrado no DOM.');
+        if (realAgents.length === 0) {
+          console.warn('[Atlas Comet] Nenhum agente encontrado na API para este grupo.');
         } else {
-          // Map DOM agents to real IDs
-          const finalAgents = domAgents.map(da => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const realMatch = realAgents.find((ra: any) => {
-              const raName = ra.contact?.name || ra.name || '';
-              return raName.trim().toLowerCase() === da.name.trim().toLowerCase();
-            });
+          // Map real agents to our final list format
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const finalAgents = realAgents.map((ra: any) => {
             return {
-              id: realMatch ? realMatch.id : da.id,
-              name: da.name
+              id: ra.id,
+              name: ra.contact?.name || ra.name || `Agente #${ra.id}`
             };
           });
 
@@ -1268,171 +1249,12 @@ export class NewTicketUIFactory {
     }
   }
 
-  // ─── Ghost Click Extraction ────────────────────────────────────────────────
-  
-  /**
-   * Single robust plan: Simulate a click on the native Ember Power Select dropdown,
-   * wait for the options to render in the DOM, extract them, and close the dropdown.
-   * This guarantees 100% synchronization with what the user would see natively.
-   */
-  private static async extractFromNativeDropdown(dataTestId: string): Promise<{id: number, name: string}[]> {
-    return new Promise((resolve) => {
-      console.log(`[Atlas Comet] Extraindo opções do campo nativo: ${dataTestId}`);
-      
-      const wrapper = document.querySelector(`[data-test-id="${dataTestId}"]`);
-      if (!wrapper) {
-        console.warn(`[Atlas Comet] Campo nativo ${dataTestId} não encontrado.`);
-        return resolve([]);
-      }
-
-      const trigger = wrapper.querySelector('.ember-power-select-trigger') as HTMLElement;
-      if (!trigger) {
-        console.warn(`[Atlas Comet] Trigger do campo ${dataTestId} não encontrado.`);
-        return resolve([]);
-      }
-
-      // Check if already open (if there is an aria-owns that exists)
-      const isAlreadyOpen = trigger.getAttribute('aria-expanded') === 'true';
-      if (!isAlreadyOpen) {
-        trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-      }
-
-      // Wait for Ember to render the dropdown body initially
-      setTimeout(async () => {
-        const optionsList: {id: number, name: string}[] = [];
-        const seenNames = new Set<string>();
-        
-        const dropdownContent = document.querySelector('.ember-power-select-options');
-        
-        if (dropdownContent) {
-          // Ember uses virtual scrolling, so we need to scroll down to extract everything
-          let lastScrollTop = -1;
-          let scrolling = true;
-          
-          while (scrolling) {
-            const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
-            
-            for (let i = 0; i < options.length; i++) {
-              const opt = options[i] as HTMLElement;
-              const text = opt.textContent?.trim();
-              
-              if (!text || text === '--' || text.includes('Selecione')) continue;
-
-              if (!seenNames.has(text)) {
-                seenNames.add(text);
-                let id = parseInt(opt.getAttribute('data-option-index') || String(i), 10);
-                const idMatch = opt.id?.match(/ember\d+-(\d+)/);
-                if (idMatch) id = parseInt(idMatch[1], 10);
-                optionsList.push({ id, name: text });
-              }
-            }
-
-            lastScrollTop = dropdownContent.scrollTop;
-            dropdownContent.scrollTop += Math.max(50, dropdownContent.clientHeight - 20); // scroll down by almost a full page
-            
-            // Wait for Ember to render the next chunk
-            await new Promise(r => setTimeout(r, 60));
-            
-            // Se o scrollTop não mudou, chegamos ao fim
-            if (dropdownContent.scrollTop <= lastScrollTop) {
-              scrolling = false;
-            }
-          }
-        } else {
-          // Fallback if no scroll container found
-          const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
-          for (let i = 0; i < options.length; i++) {
-            const opt = options[i] as HTMLElement;
-            const text = opt.textContent?.trim();
-            if (!text || text === '--' || text.includes('Selecione')) continue;
-            const idFallback = parseInt(opt.getAttribute('data-option-index') || String(i), 10);
-            optionsList.push({ id: idFallback, name: text });
-          }
-        }
-
-        // Close the dropdown
-        if (!isAlreadyOpen) {
-          trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-        }
-
-        console.log(`[Atlas Comet] Opções extraídas de ${dataTestId}:`, optionsList);
-        resolve(optionsList);
-      }, 250);
-    });
-  }
-
-  /**
-   * Clicks and selects a specific option by name in a native Ember Power Select dropdown,
-   * supporting virtual scrolling to find the option.
-   */
-  private static async selectInNativeDropdown(dataTestId: string, optionName: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      const wrapper = document.querySelector(`[data-test-id="${dataTestId}"]`);
-      if (!wrapper) return resolve(false);
-
-      const trigger = wrapper.querySelector('.ember-power-select-trigger') as HTMLElement;
-      if (!trigger) return resolve(false);
-
-      const isAlreadyOpen = trigger.getAttribute('aria-expanded') === 'true';
-      if (!isAlreadyOpen) {
-        trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-      }
-
-      setTimeout(async () => {
-        const dropdownContent = document.querySelector('.ember-power-select-options');
-        let targetOpt: HTMLElement | null = null;
-        
-        if (dropdownContent) {
-          let lastScrollTop = -1;
-          let scrolling = true;
-          
-          while (scrolling) {
-            const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
-            targetOpt = options.find(o => o.textContent?.trim() === optionName) as HTMLElement;
-            
-            if (targetOpt) break;
-            
-            lastScrollTop = dropdownContent.scrollTop;
-            dropdownContent.scrollTop += Math.max(50, dropdownContent.clientHeight - 20);
-            await new Promise(r => setTimeout(r, 60));
-            if (dropdownContent.scrollTop <= lastScrollTop) scrolling = false;
-          }
-        } else {
-          const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
-          targetOpt = options.find(o => o.textContent?.trim() === optionName) as HTMLElement;
-        }
-
-        if (targetOpt) {
-          // Select it
-          targetOpt.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-          targetOpt.click();
-          resolve(true);
-        } else {
-          // Close if not found
-          if (!isAlreadyOpen) {
-            trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-          }
-          resolve(false);
-        }
-      }, 250);
-    });
-  }
-
   // ─── Group Loading ────────────────────────────────────────────────────────
 
   private static async loadGroups(grupoSelect: HTMLSelectElement): Promise<void> {
     try {
-      // 1. Get real groups (with IDs) from LookupService
       await LookupService.init();
       const realGroups = LookupService.getAllGroups();
-
-      // 2. Extrair as opções (textos) diretamente do DOM nativo
-      let domGroups = await this.extractFromNativeDropdown('group');
-
-      // Se falhar (ex: página não carregou), tenta usar apenas o LookupService
-      if (!domGroups || domGroups.length === 0) {
-        domGroups = realGroups;
-      }
 
       while (grupoSelect.firstChild) grupoSelect.removeChild(grupoSelect.firstChild);
 
@@ -1441,21 +1263,13 @@ export class NewTicketUIFactory {
       emptyOpt.textContent = '-- Selecionar Grupo --';
       grupoSelect.appendChild(emptyOpt);
 
-      if (domGroups && domGroups.length > 0) {
-        // Map DOM names to real IDs
-        const finalGroups = domGroups.map(dg => {
-          const realMatch = realGroups.find(rg => rg.name.trim() === dg.name.trim());
-          return {
-            id: realMatch ? realMatch.id : dg.id,
-            name: dg.name
-          };
-        });
-
+      if (realGroups && realGroups.length > 0) {
+        // Use real groups directly
+        const finalGroups = [...realGroups];
         finalGroups.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
         for (const group of finalGroups) {
           const opt = document.createElement('option');
-          // Salvamos o nome original como attribute para usá-lo depois se precisarmos preencher o form nativo
           opt.setAttribute('data-name', group.name);
           opt.value = String(group.id);
           opt.textContent = group.name;
@@ -1588,6 +1402,7 @@ export class NewTicketUIFactory {
       // Only add optional fields if set
       if (formData.grupoId) payload.group_id = Number(formData.grupoId);
       if (formData.agenteId) payload.responder_id = Number(formData.agenteId);
+      if (formData.contato.email) payload.email = formData.contato.email;
 
       // Map product name to product_id
       // We'll try to find the product ID from the page's prefetched data

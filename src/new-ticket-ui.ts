@@ -361,11 +361,21 @@ export class NewTicketUIFactory {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           let contacts = (await response.json()) as any[];
 
-          // A API interna pode retornar os contatos dentro de uma chave 'contacts' ou direto no array
-          if (!Array.isArray(contacts) && (contacts as unknown as Record<string, unknown>).contacts) {
+          let parsedContacts: any[] = [];
+          if (!Array.isArray(contacts)) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            contacts = (contacts as unknown as Record<string, unknown>).contacts as any[];
+            const obj = contacts as any;
+            if (obj.contacts && Array.isArray(obj.contacts)) parsedContacts = obj.contacts;
+            else if (obj.users && Array.isArray(obj.users)) parsedContacts = obj.users;
+            else if (obj.results && Array.isArray(obj.results)) parsedContacts = obj.results;
+            else {
+              const arrayVals = Object.values(obj).find(val => Array.isArray(val));
+              parsedContacts = (arrayVals as any[]) || [];
+            }
+          } else {
+            parsedContacts = contacts;
           }
+          contacts = parsedContacts;
 
           while (contatoResultsContainer.firstChild)
             contatoResultsContainer.removeChild(contatoResultsContainer.firstChild);
@@ -904,11 +914,23 @@ export class NewTicketUIFactory {
       agenteSelect.appendChild(loadingOpt);
 
       try {
-        // Fetch agents for this specific group using the official v2 API
-        const response = await fetch(`/api/v2/agents?group_id=${groupId}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const agents = (await response.json()) as any[];
+        let agents: any[] = [];
+        try {
+          const response = await FreshdeskAPI.sendBridgeRequest(`/api/v2/agents?group_id=${groupId}`, 'GET');
+          agents = (response as any) || [];
+        } catch (e) {
+          console.warn('[Atlas Comet] Falha ao buscar agentes na API V2, tentando memoria:', e);
+          try {
+            const memoryData = await FreshdeskAPI.extractMemoryData();
+            if (memoryData && memoryData.agents) {
+              agents = memoryData.agents;
+            }
+          } catch (err2) {
+            console.error('[Atlas Comet] Falha na memoria nativa para agentes:', err2);
+          }
+        }
+
+        if (!Array.isArray(agents)) agents = [];
 
         while (agenteSelect.firstChild) agenteSelect.removeChild(agenteSelect.firstChild);
 
@@ -1221,11 +1243,23 @@ export class NewTicketUIFactory {
    */
   private static async loadGroups(grupoSelect: HTMLSelectElement): Promise<void> {
     try {
-      // Use the official v2 API to list groups
-      const response = await fetch('/api/v2/groups');
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const groups = (await response.json()) as any[];
+      let groups: any[] = [];
+      try {
+        const response = await FreshdeskAPI.sendBridgeRequest('/api/v2/groups', 'GET');
+        groups = (response as any) || [];
+      } catch (e) {
+        console.warn('[Atlas Comet] Falha ao buscar grupos na API V2, tentando memoria:', e);
+        try {
+          const memoryData = await FreshdeskAPI.extractMemoryData();
+          if (memoryData && memoryData.groups) {
+            groups = memoryData.groups;
+          }
+        } catch (err2) {
+          console.error('[Atlas Comet] Falha na memoria nativa:', err2);
+        }
+      }
+
+      if (!Array.isArray(groups)) groups = [];
 
       while (grupoSelect.firstChild) grupoSelect.removeChild(grupoSelect.firstChild);
 

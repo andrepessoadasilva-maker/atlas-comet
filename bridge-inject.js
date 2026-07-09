@@ -228,14 +228,11 @@
             if (window.gon.groups) possibleGroups = possibleGroups.concat(window.gon.groups);
             if (window.gon.agents) possibleAgents = possibleAgents.concat(window.gon.agents);
             if (window.gon.all_agents) possibleAgents = possibleAgents.concat(window.gon.all_agents);
-            if (window.gon.group_agents) possibleAgents = possibleAgents.concat(window.gon.group_agents);
-            if (window.gon.ticket_agents) possibleAgents = possibleAgents.concat(window.gon.ticket_agents);
           }
           if (typeof window.Mink !== 'undefined' && window.Mink.data) {
             if (window.Mink.data.groups) possibleGroups = possibleGroups.concat(window.Mink.data.groups);
             if (window.Mink.data.all_groups) possibleGroups = possibleGroups.concat(window.Mink.data.all_groups);
             if (window.Mink.data.agents) possibleAgents = possibleAgents.concat(window.Mink.data.agents);
-            if (window.Mink.data.all_agents) possibleAgents = possibleAgents.concat(window.Mink.data.all_agents);
           }
 
           memData.groups = possibleGroups;
@@ -244,7 +241,12 @@
           console.error('[Atlas Comet Bridge] Erro extraindo memoria:', e);
         }
         
-        sendResponse(requestId, true, 200, memData);
+        window.postMessage({
+          type: 'ATLAS_COMET_BRIDGE_RESPONSE',
+          requestId: requestId,
+          status: 200,
+          response: memData
+        }, '*');
         return;
       }
       

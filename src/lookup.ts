@@ -39,8 +39,6 @@ export interface TipoEntry {
 let lookupMap: Map<number, LookupEntry> = new Map();
 let tipoList: TipoEntry[] = [];
 let groupList: { id: number; name: string }[] = [];
-// eslint-disable-next-line prefer-const
-let productList: { id: number; name: string }[] = [];
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
 
@@ -52,10 +50,6 @@ export class LookupService {
 
   public static getAllTipos(): TipoEntry[] {
     return tipoList;
-  }
-
-  public static getAllProducts(): { id: number; name: string }[] {
-    return productList;
   }
 
   public static getAllGroups(): { id: number; name: string }[] {
@@ -86,9 +80,9 @@ export class LookupService {
     initPromise = (async () => {
       try {
         if (!force) {
-          const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[]; products: { id: number; name: string }[] } | null;
+          const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[] } | null;
           if (cached && !this.isCacheExpired(cached.timestamp)) {
-            this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || [], cached.products || []);
+            this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || []);
             isInitialized = true;
             return;
           }
@@ -105,11 +99,11 @@ export class LookupService {
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('[Atlas Comet] Erro ao inicializar LookupService:', error);
-        const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[]; products: { id: number; name: string }[] } | null;
+        const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[] } | null;
         if (cached) {
           // eslint-disable-next-line no-console
           console.log('[Atlas Comet] Usando cache expirado devido a falha na API.');
-          this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || [], cached.products || []);
+          this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || []);
           isInitialized = true;
         } else {
           throw error;
@@ -197,32 +191,6 @@ export class LookupService {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const id = typeof val === 'number' ? val : (val as any).id || parseInt(String(val), 10);
           if (id) groupList.push({ id, name: key });
-        }
-      }
-    }
-
-    // Parse Products
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const productField = fieldsArray.find((f: any) => f.name === 'product_id' || f.name === 'product');
-    if (productField && productField.choices) {
-      const choices = productField.choices;
-      if (Array.isArray(choices)) {
-        for (const c of choices) {
-          if (Array.isArray(c) && c.length >= 2) {
-            const name = typeof c[0] === 'string' ? c[0] : String(c[0]);
-            const id = typeof c[1] === 'number' ? c[1] : parseInt(String(c[1]), 10);
-            if (id) productList.push({ id, name });
-          } else if (c && typeof c === 'object') {
-            const id = c.id || c.value || c.choice_id;
-            const name = c.value || c.label || c.name || `Produto #${id}`;
-            if (id) productList.push({ id: Number(id), name: String(name) });
-          }
-        }
-      } else if (typeof choices === 'object') {
-        for (const [key, val] of Object.entries(choices)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const id = typeof val === 'number' ? val : (val as any).id || parseInt(String(val), 10);
-          if (id) productList.push({ id, name: key });
         }
       }
     }

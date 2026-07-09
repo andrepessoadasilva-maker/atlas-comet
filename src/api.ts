@@ -231,7 +231,7 @@ export class FreshdeskAPI {
    * @returns {Promise<unknown>} The parsed response data.
    * @throws {Error} On timeout, network errors, or non-2xx responses.
    */
-  private static async sendBridgeRequest(
+  public static async sendBridgeRequest(
     url: string,
     method: string,
     body?: unknown,
@@ -287,20 +287,30 @@ export class FreshdeskAPI {
     await this.sendBridgeRequest(url, 'PUT', payload);
   }
 
-  /**
-   * Fetches the full ticket fields schema from Freshdesk's internal API.
-   * This allows dynamic discovery of 'Tipo' and 'Serviço Nível' options.
-   *
-   * @returns {Promise<unknown>} The parsed API response containing the ticket fields array.
-   */
   public static async fetchTicketFields(): Promise<unknown> {
     try {
-      const url = `/api/_/ticket_fields`;
-      return await this.sendBridgeRequest(url, 'GET');
+      console.log('[Atlas Comet] Buscando ticket fields da API V2 (preferencial)...');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const fields = await this.sendBridgeRequest('/api/v2/ticket_fields', 'GET') as any[];
+      
+      // V2 returns an array directly. V1 returns { ticket_fields: [...] }
+      if (Array.isArray(fields) && fields.length > 0) {
+        return fields;
+      }
+      
+      console.log('[Atlas Comet] V2 retornou vazio ou erro, caindo para API V1...');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v1Res = await this.sendBridgeRequest('/api/_/ticket_fields', 'GET') as any;
+      return v1Res.ticket_fields || v1Res;
     } catch (e) {
-      console.warn('[Atlas Comet] Falha na rota interna, tentando v2 API...', e);
-      const fallbackUrl = `/api/v2/ticket_fields`;
-      return await this.sendBridgeRequest(fallbackUrl, 'GET');
+      console.warn('[Atlas Comet] Erro buscando V2 ticket_fields, tentando V1:', e);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const v1Res = await this.sendBridgeRequest('/api/_/ticket_fields', 'GET') as any;
+        return v1Res.ticket_fields || v1Res;
+      } catch (e2) {
+        throw new Error(`Failed to fetch ticket fields from both V2 and V1: ${String(e2)}`);
+      }
     }
   }
 

@@ -83,10 +83,27 @@ export class NewTicketUIFactory {
     };
     container.appendChild(btnService);
 
-    // Attach to header or float
+    // Find target element to inject
+    console.log('[Atlas Comet] Tentando injetar botão Definir Serviço. Elemento alvo:', headerContainer);
     if (headerContainer) {
-      headerContainer.prepend(container);
+      if (headerContainer.classList.contains('breadcrumb-title') || headerContainer.getAttribute('data-test-title') === 'main-title') {
+        // Se encontramos o título exato, insere o botão logo após ele para ficar colado à direita do texto
+        console.log('[Atlas Comet] Injetando botão logo após o título principal (esquerda).');
+        container.style.marginLeft = '12px';
+        container.style.display = 'inline-flex';
+        
+        if (headerContainer.parentElement) {
+          headerContainer.parentElement.style.display = 'flex';
+          headerContainer.parentElement.style.alignItems = 'center';
+        }
+        
+        headerContainer.insertAdjacentElement('afterend', container);
+      } else {
+        console.log('[Atlas Comet] Injetando botão com appendChild no headerContainer.', headerContainer.className);
+        headerContainer.appendChild(container);
+      }
     } else {
+      console.log('[Atlas Comet] Header não encontrado. Usando botão flutuante.');
       // Floating mode — top-right of the page
       container.style.cssText =
         'position: fixed; top: 12px; right: 220px; display: inline-flex; align-items: center; gap: 6px; z-index: 99990; height: 32px;';
@@ -353,29 +370,23 @@ export class NewTicketUIFactory {
       if (contatoSearchTimeout) clearTimeout(contatoSearchTimeout);
       contatoSearchTimeout = setTimeout(async () => {
         try {
-          // Utiliza a API interna do Freshdesk que é a mesma utilizada pelo campo original
-          const response = await fetch(
-            `/api/_/contacts/autocomplete?term=${encodeURIComponent(query)}`,
-          );
-          if (!response.ok) return;
+          const url = `/api/_/search/autocomplete/requesters`;
+          console.log('[Atlas Comet] Buscando contatos em:', url);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let contacts = (await response.json()) as any[];
+          let contacts = (await FreshdeskAPI.sendBridgeRequest(url, 'POST', { term: query })) as any;
+          console.log('[Atlas Comet] Resposta bruta de contatos:', contacts);
 
-          let parsedContacts: any[] = [];
-          if (!Array.isArray(contacts)) {
+          // A API interna pode retornar os contatos dentro de uma chave 'contacts' ou direto no array
+          if (!Array.isArray(contacts) && contacts.contacts) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const obj = contacts as any;
-            if (obj.contacts && Array.isArray(obj.contacts)) parsedContacts = obj.contacts;
-            else if (obj.users && Array.isArray(obj.users)) parsedContacts = obj.users;
-            else if (obj.results && Array.isArray(obj.results)) parsedContacts = obj.results;
-            else {
-              const arrayVals = Object.values(obj).find(val => Array.isArray(val));
-              parsedContacts = (arrayVals as any[]) || [];
-            }
-          } else {
-            parsedContacts = contacts;
+            contacts = contacts.contacts as any[];
+          } else if (!Array.isArray(contacts)) {
+            // fallback if it's some other object structure
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            contacts = (Object.values(contacts).find(val => Array.isArray(val)) as any[]) || [];
           }
-          contacts = parsedContacts;
+          
+          console.log('[Atlas Comet] Array de contatos extraído:', contacts);
 
           while (contatoResultsContainer.firstChild)
             contatoResultsContainer.removeChild(contatoResultsContainer.firstChild);
@@ -898,6 +909,8 @@ export class NewTicketUIFactory {
     // Grupo → Agente dynamic loading
     grupoSelect.addEventListener('change', async () => {
       const groupId = grupoSelect.value;
+      const groupName = grupoSelect.options[grupoSelect.selectedIndex]?.text;
+      
       while (agenteSelect.firstChild) agenteSelect.removeChild(agenteSelect.firstChild);
 
       if (!groupId) {
@@ -910,27 +923,36 @@ export class NewTicketUIFactory {
 
       const loadingOpt = document.createElement('option');
       loadingOpt.value = '';
-      loadingOpt.textContent = 'Carregando agentes...';
+      loadingOpt.textContent = 'Sincronizando agentes...';
       agenteSelect.appendChild(loadingOpt);
 
       try {
-        let agents: any[] = [];
-        try {
-          const response = await FreshdeskAPI.sendBridgeRequest(`/api/v2/agents?group_id=${groupId}`, 'GET');
-          agents = (response as any) || [];
-        } catch (e) {
-          console.warn('[Atlas Comet] Falha ao buscar agentes na API V2, tentando memoria:', e);
-          try {
-            const memoryData = await FreshdeskAPI.extractMemoryData();
-            if (memoryData && memoryData.agents) {
-              agents = memoryData.agents;
-            }
-          } catch (err2) {
-            console.error('[Atlas Comet] Falha na memoria nativa para agentes:', err2);
+        console.log(`[Atlas Comet] Sincronizando grupo selecionado com o nativo: ${groupName}`);
+        
+        // 1. Sincronizar o dropdown nativo de grupos
+        if (groupName) {
+          const synced = await this.selectInNativeDropdown('group', groupName);
+          if (synced) {
+            console.log('[Atlas Comet] Grupo nativo atualizado com sucesso.');
+            await new Promise(r => setTimeout(r, 400)); // Esperar Freshdesk carregar os agentes
+          } else {
+            console.warn('[Atlas Comet] Não foi possível encontrar o grupo no dropdown nativo.');
           }
         }
 
-        if (!Array.isArray(agents)) agents = [];
+        // 2. Extrair agentes do dropdown nativo
+        const domAgents = await this.extractFromNativeDropdown('agent');
+
+        // 3. Buscar IDs reais pela API (opcional, apenas para obter IDs reais)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let realAgents: any[] = [];
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await FreshdeskAPI.sendBridgeRequest(`/api/v2/agents?group_id=${groupId}`, 'GET') as any;
+          realAgents = Array.isArray(res) ? res : (res.agents || []);
+        } catch (e) {
+          console.warn('[Atlas Comet] Falha ao buscar IDs de agentes da API V2', e);
+        }
 
         while (agenteSelect.firstChild) agenteSelect.removeChild(agenteSelect.firstChild);
 
@@ -939,21 +961,33 @@ export class NewTicketUIFactory {
         emptyOpt.textContent = '-- Selecionar Agente --';
         agenteSelect.appendChild(emptyOpt);
 
-        // Sort agents alphabetically by name
-        agents.sort(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (a: any, b: any) => {
-            const nameA = (a.contact?.name || a.name || '').toLowerCase();
-            const nameB = (b.contact?.name || b.name || '').toLowerCase();
-            return nameA.localeCompare(nameB);
-          },
-        );
+        if (domAgents.length === 0) {
+          console.warn('[Atlas Comet] Nenhum agente encontrado no DOM.');
+        } else {
+          // Map DOM agents to real IDs
+          const finalAgents = domAgents.map(da => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const realMatch = realAgents.find((ra: any) => {
+              const raName = ra.contact?.name || ra.name || '';
+              return raName.trim().toLowerCase() === da.name.trim().toLowerCase();
+            });
+            return {
+              id: realMatch ? realMatch.id : da.id,
+              name: da.name
+            };
+          });
 
-        for (const agent of agents) {
-          const opt = document.createElement('option');
-          opt.value = String(agent.id);
-          opt.textContent = agent.contact?.name || agent.name || `Agente #${agent.id}`;
-          agenteSelect.appendChild(opt);
+          console.log(`[Atlas Comet] Agentes extraídos para o grupo ${groupId}:`, finalAgents);
+
+          finalAgents.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+          for (const agent of finalAgents) {
+            const opt = document.createElement('option');
+            opt.setAttribute('data-name', agent.name);
+            opt.value = String(agent.id);
+            opt.textContent = agent.name;
+            agenteSelect.appendChild(opt);
+          }
         }
 
         // Restore saved agent preference
@@ -1234,32 +1268,171 @@ export class NewTicketUIFactory {
     }
   }
 
-  // ─── Group Loading ────────────────────────────────────────────────────────
-
+  // ─── Ghost Click Extraction ────────────────────────────────────────────────
+  
   /**
-   * Loads all groups from the Freshdesk API and populates the group select element.
-   *
-   * @param grupoSelect - The select element to populate with groups.
+   * Single robust plan: Simulate a click on the native Ember Power Select dropdown,
+   * wait for the options to render in the DOM, extract them, and close the dropdown.
+   * This guarantees 100% synchronization with what the user would see natively.
    */
-  private static async loadGroups(grupoSelect: HTMLSelectElement): Promise<void> {
-    try {
-      let groups: any[] = [];
-      try {
-        const response = await FreshdeskAPI.sendBridgeRequest('/api/v2/groups', 'GET');
-        groups = (response as any) || [];
-      } catch (e) {
-        console.warn('[Atlas Comet] Falha ao buscar grupos na API V2, tentando memoria:', e);
-        try {
-          const memoryData = await FreshdeskAPI.extractMemoryData();
-          if (memoryData && memoryData.groups) {
-            groups = memoryData.groups;
-          }
-        } catch (err2) {
-          console.error('[Atlas Comet] Falha na memoria nativa:', err2);
-        }
+  private static async extractFromNativeDropdown(dataTestId: string): Promise<{id: number, name: string}[]> {
+    return new Promise((resolve) => {
+      console.log(`[Atlas Comet] Extraindo opções do campo nativo: ${dataTestId}`);
+      
+      const wrapper = document.querySelector(`[data-test-id="${dataTestId}"]`);
+      if (!wrapper) {
+        console.warn(`[Atlas Comet] Campo nativo ${dataTestId} não encontrado.`);
+        return resolve([]);
       }
 
-      if (!Array.isArray(groups)) groups = [];
+      const trigger = wrapper.querySelector('.ember-power-select-trigger') as HTMLElement;
+      if (!trigger) {
+        console.warn(`[Atlas Comet] Trigger do campo ${dataTestId} não encontrado.`);
+        return resolve([]);
+      }
+
+      // Check if already open (if there is an aria-owns that exists)
+      const isAlreadyOpen = trigger.getAttribute('aria-expanded') === 'true';
+      if (!isAlreadyOpen) {
+        trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      }
+
+      // Wait for Ember to render the dropdown body initially
+      setTimeout(async () => {
+        const optionsList: {id: number, name: string}[] = [];
+        const seenNames = new Set<string>();
+        
+        const dropdownContent = document.querySelector('.ember-power-select-options');
+        
+        if (dropdownContent) {
+          // Ember uses virtual scrolling, so we need to scroll down to extract everything
+          let lastScrollTop = -1;
+          let scrolling = true;
+          
+          while (scrolling) {
+            const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
+            
+            for (let i = 0; i < options.length; i++) {
+              const opt = options[i] as HTMLElement;
+              const text = opt.textContent?.trim();
+              
+              if (!text || text === '--' || text.includes('Selecione')) continue;
+
+              if (!seenNames.has(text)) {
+                seenNames.add(text);
+                let id = parseInt(opt.getAttribute('data-option-index') || String(i), 10);
+                const idMatch = opt.id?.match(/ember\d+-(\d+)/);
+                if (idMatch) id = parseInt(idMatch[1], 10);
+                optionsList.push({ id, name: text });
+              }
+            }
+
+            lastScrollTop = dropdownContent.scrollTop;
+            dropdownContent.scrollTop += Math.max(50, dropdownContent.clientHeight - 20); // scroll down by almost a full page
+            
+            // Wait for Ember to render the next chunk
+            await new Promise(r => setTimeout(r, 60));
+            
+            // Se o scrollTop não mudou, chegamos ao fim
+            if (dropdownContent.scrollTop <= lastScrollTop) {
+              scrolling = false;
+            }
+          }
+        } else {
+          // Fallback if no scroll container found
+          const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
+          for (let i = 0; i < options.length; i++) {
+            const opt = options[i] as HTMLElement;
+            const text = opt.textContent?.trim();
+            if (!text || text === '--' || text.includes('Selecione')) continue;
+            const idFallback = parseInt(opt.getAttribute('data-option-index') || String(i), 10);
+            optionsList.push({ id: idFallback, name: text });
+          }
+        }
+
+        // Close the dropdown
+        if (!isAlreadyOpen) {
+          trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        }
+
+        console.log(`[Atlas Comet] Opções extraídas de ${dataTestId}:`, optionsList);
+        resolve(optionsList);
+      }, 250);
+    });
+  }
+
+  /**
+   * Clicks and selects a specific option by name in a native Ember Power Select dropdown,
+   * supporting virtual scrolling to find the option.
+   */
+  private static async selectInNativeDropdown(dataTestId: string, optionName: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const wrapper = document.querySelector(`[data-test-id="${dataTestId}"]`);
+      if (!wrapper) return resolve(false);
+
+      const trigger = wrapper.querySelector('.ember-power-select-trigger') as HTMLElement;
+      if (!trigger) return resolve(false);
+
+      const isAlreadyOpen = trigger.getAttribute('aria-expanded') === 'true';
+      if (!isAlreadyOpen) {
+        trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+      }
+
+      setTimeout(async () => {
+        const dropdownContent = document.querySelector('.ember-power-select-options');
+        let targetOpt: HTMLElement | null = null;
+        
+        if (dropdownContent) {
+          let lastScrollTop = -1;
+          let scrolling = true;
+          
+          while (scrolling) {
+            const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
+            targetOpt = options.find(o => o.textContent?.trim() === optionName) as HTMLElement;
+            
+            if (targetOpt) break;
+            
+            lastScrollTop = dropdownContent.scrollTop;
+            dropdownContent.scrollTop += Math.max(50, dropdownContent.clientHeight - 20);
+            await new Promise(r => setTimeout(r, 60));
+            if (dropdownContent.scrollTop <= lastScrollTop) scrolling = false;
+          }
+        } else {
+          const options = Array.from(document.querySelectorAll('.ember-power-select-option'));
+          targetOpt = options.find(o => o.textContent?.trim() === optionName) as HTMLElement;
+        }
+
+        if (targetOpt) {
+          // Select it
+          targetOpt.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+          targetOpt.click();
+          resolve(true);
+        } else {
+          // Close if not found
+          if (!isAlreadyOpen) {
+            trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+          }
+          resolve(false);
+        }
+      }, 250);
+    });
+  }
+
+  // ─── Group Loading ────────────────────────────────────────────────────────
+
+  private static async loadGroups(grupoSelect: HTMLSelectElement): Promise<void> {
+    try {
+      // 1. Get real groups (with IDs) from LookupService
+      await LookupService.init();
+      const realGroups = LookupService.getAllGroups();
+
+      // 2. Extrair as opções (textos) diretamente do DOM nativo
+      let domGroups = await this.extractFromNativeDropdown('group');
+
+      // Se falhar (ex: página não carregou), tenta usar apenas o LookupService
+      if (!domGroups || domGroups.length === 0) {
+        domGroups = realGroups;
+      }
 
       while (grupoSelect.firstChild) grupoSelect.removeChild(grupoSelect.firstChild);
 
@@ -1267,20 +1440,35 @@ export class NewTicketUIFactory {
       emptyOpt.value = '';
       emptyOpt.textContent = '-- Selecionar Grupo --';
       grupoSelect.appendChild(emptyOpt);
-      // Sort groups alphabetically
-      groups.sort(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (a: any, b: any) => (a.name || '').localeCompare(b.name || ''),
-      );
 
-      for (const group of groups) {
-        const opt = document.createElement('option');
-        opt.value = String(group.id);
-        opt.textContent = group.name || `Grupo #${group.id}`;
-        grupoSelect.appendChild(opt);
+      if (domGroups && domGroups.length > 0) {
+        // Map DOM names to real IDs
+        const finalGroups = domGroups.map(dg => {
+          const realMatch = realGroups.find(rg => rg.name.trim() === dg.name.trim());
+          return {
+            id: realMatch ? realMatch.id : dg.id,
+            name: dg.name
+          };
+        });
+
+        finalGroups.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        for (const group of finalGroups) {
+          const opt = document.createElement('option');
+          // Salvamos o nome original como attribute para usá-lo depois se precisarmos preencher o form nativo
+          opt.setAttribute('data-name', group.name);
+          opt.value = String(group.id);
+          opt.textContent = group.name;
+          grupoSelect.appendChild(opt);
+        }
+      } else {
+        const errorOpt = document.createElement('option');
+        errorOpt.value = '';
+        errorOpt.textContent = 'Erro: Nenhum grupo encontrado';
+        grupoSelect.appendChild(errorOpt);
       }
     } catch (e) {
-      console.error('[Atlas Comet] Erro ao carregar grupos:', e);
+      console.error('[Atlas Comet] Erro fatal ao carregar grupos:', e);
       while (grupoSelect.firstChild) grupoSelect.removeChild(grupoSelect.firstChild);
       const errorOpt = document.createElement('option');
       errorOpt.value = '';
@@ -1399,56 +1587,7 @@ export class NewTicketUIFactory {
 
       // Only add optional fields if set
       if (formData.grupoId) payload.group_id = Number(formData.grupoId);
-      if (formData.agenteId) {
-        let responderId = Number(formData.agenteId);
-        
-        // Na API _/tickets (V1), o responder_id DEVE ser o ID de Contato (User ID).
-        // Como o DOM ou o gon.agents geralmente tem apenas o Agent ID ou um index falso (1, 2, 3),
-        // NÓS SEMPRE buscamos o User ID pelo Autocomplete usando o nome do agente!
-        if (formData.agenteName) {
-          console.error(`[Atlas Comet DEBUG] Buscando User ID definitivo para: ${formData.agenteName}`);
-          try {
-            const reqRes = await FreshdeskAPI.sendBridgeRequest(
-              `/api/_/search/autocomplete/requesters`,
-              'POST',
-              JSON.stringify({ term: formData.agenteName })
-            );
-            
-            let reqList: any[] = [];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            if (!Array.isArray(reqRes) && (reqRes as any).contacts) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              reqList = (reqRes as any).contacts;
-            } else if (!Array.isArray(reqRes) && reqRes && typeof reqRes === 'object') {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              reqList = (Object.values(reqRes).find(val => Array.isArray(val)) as any[]) || [];
-            } else if (Array.isArray(reqRes)) {
-              reqList = reqRes;
-            }
-            
-            console.error(`[Atlas Comet DEBUG] Autocomplete retornou array com ${reqList.length} itens. Lista:`, reqList);
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const exactMatch = reqList.find((r: any) => {
-              if (!r.name) return false;
-              const n1 = r.name.trim().toLowerCase();
-              const n2 = formData.agenteName.trim().toLowerCase();
-              return n1 === n2 || n1.includes(n2) || n2.includes(n1);
-            });
-            
-            if (exactMatch && exactMatch.id) {
-              responderId = exactMatch.id;
-              console.error(`[Atlas Comet DEBUG] Agente mapeado via autocomplete: ID ${responderId}`);
-            } else {
-              console.error(`[Atlas Comet DEBUG] NENHUM MATCH EXATO ENCONTRADO para ${formData.agenteName}`);
-            }
-          } catch (e) {
-            console.error('[Atlas Comet DEBUG] Falha no autocomplete requesters:', e);
-          }
-        }
-        
-        payload.responder_id = responderId;
-      }
+      if (formData.agenteId) payload.responder_id = Number(formData.agenteId);
 
       // Map product name to product_id
       // We'll try to find the product ID from the page's prefetched data
@@ -1471,7 +1610,7 @@ export class NewTicketUIFactory {
         }
       }
 
-      console.error('[Atlas Comet DEBUG] PAYLOAD DO TICKET:', JSON.stringify(payload, null, 2));
+      console.log('[Atlas Comet] New Ticket payload:', JSON.stringify(payload, null, 2));
 
       // ─── Create the ticket via API Bridge ──────────────────────────────
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

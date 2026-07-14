@@ -1,5 +1,5 @@
 import { CONSTANTS } from './constants';
-import { LookupService } from './lookup';
+import { LookupService, FieldChoice } from './lookup';
 import { FreshdeskAPI } from './api';
 import { ContextManager } from './context';
 import lottie from 'lottie-web';
@@ -214,16 +214,20 @@ export class NewTicketUIFactory {
      * Creates a complete dropdown field with label, select element, and
      * a "Lembrar" button for persisting the selected value.
      *
+     * Updated to accept FieldChoice[] (from LookupService) instead of plain
+     * string arrays. Each option carries both a human-readable label and a
+     * numeric API ID as its value.
+     *
      * @param labelText - The field label text.
-     * @param options - Array of option strings.
-     * @param defaultValue - The default selected value.
+     * @param choices - Array of FieldChoice from LookupService (label + numeric value).
+     * @param defaultId - The default numeric ID to pre-select.
      * @param storageKey - chrome.storage.local key for memorization.
      * @returns Object with { wrapper, select } for further manipulation.
      */
     const createDropdownField = (
       labelText: string,
-      options: readonly string[],
-      defaultValue: string,
+      choices: FieldChoice[],
+      defaultId: number,
       storageKey: string,
     ): { wrapper: HTMLDivElement; select: HTMLSelectElement } => {
       const wrapper = document.createElement('div');
@@ -247,15 +251,15 @@ export class NewTicketUIFactory {
       labelRow.appendChild(memoBtn);
       wrapper.appendChild(labelRow);
 
-      // Select element
+      // Select element — each option's value is the numeric API ID
       const select = document.createElement('select');
       select.style.cssText = inputStyle + ' cursor: pointer;';
 
-      for (const opt of options) {
+      for (const choice of choices) {
         const option = document.createElement('option');
-        option.value = opt;
-        option.textContent = opt;
-        if (opt === defaultValue) option.selected = true;
+        option.value = String(choice.value);    // Numeric ID as string
+        option.textContent = choice.label;      // Human-readable label
+        if (choice.value === defaultId) option.selected = true;
         select.appendChild(option);
       }
 
@@ -307,12 +311,24 @@ export class NewTicketUIFactory {
     };
 
     // ═══════════════════════════════════════════════════════════════════════
-    // FIELD 1: Origem
+    // FIELD 1: Origem (filtered from API data)
+    // Only displays the labels specified in CONSTANTS.VALUES.ORIGEM_DISPLAY_FILTER
+    // while retaining the correct numeric IDs from the API.
     // ═══════════════════════════════════════════════════════════════════════
+    const allSources = LookupService.getSources();
+    const filterLabels = CONSTANTS.VALUES.ORIGEM_DISPLAY_FILTER.map(
+      (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(),
+    );
+    const filteredSources = allSources.filter((src) => {
+      const normalized = src.label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return filterLabels.includes(normalized);
+    });
+    // Use filtered sources if available, otherwise fall back to full list
+    const origemChoices = filteredSources.length > 0 ? filteredSources : allSources;
     const origemField = createDropdownField(
       'Origem',
-      CONSTANTS.VALUES.ORIGEM_OPTIONS,
-      CONSTANTS.VALUES.DEFAULT_ORIGEM,
+      origemChoices,
+      CONSTANTS.VALUES.DEFAULT_ORIGEM_ID,
       CONSTANTS.STORAGE.NEW_TICKET_ORIGEM,
     );
     formContainer.appendChild(origemField.wrapper);
@@ -805,8 +821,8 @@ export class NewTicketUIFactory {
     // ═══════════════════════════════════════════════════════════════════════
     const statusField = createDropdownField(
       'Status',
-      CONSTANTS.VALUES.STATUS_OPTIONS,
-      CONSTANTS.VALUES.DEFAULT_STATUS,
+      LookupService.getStatuses(),
+      CONSTANTS.VALUES.DEFAULT_STATUS_ID,
       CONSTANTS.STORAGE.NEW_TICKET_STATUS,
     );
     formContainer.appendChild(statusField.wrapper);
@@ -816,8 +832,8 @@ export class NewTicketUIFactory {
     // ═══════════════════════════════════════════════════════════════════════
     const prioridadeField = createDropdownField(
       'Prioridade',
-      CONSTANTS.VALUES.PRIORIDADE_OPTIONS,
-      CONSTANTS.VALUES.DEFAULT_PRIORIDADE,
+      LookupService.getPriorities(),
+      CONSTANTS.VALUES.DEFAULT_PRIORIDADE_ID,
       CONSTANTS.STORAGE.NEW_TICKET_PRIORIDADE,
     );
     formContainer.appendChild(prioridadeField.wrapper);
@@ -1041,12 +1057,15 @@ export class NewTicketUIFactory {
     });
 
     // ═══════════════════════════════════════════════════════════════════════
-    // FIELD 9: Produto
+    // FIELD 9: Produto (dynamic from API)
     // ═══════════════════════════════════════════════════════════════════════
+    const productChoices = LookupService.getProducts();
+    // Use first product as default if available, otherwise 0
+    const defaultProductId = productChoices.length > 0 ? productChoices[0].value : 0;
     const produtoField = createDropdownField(
       'Produto',
-      CONSTANTS.VALUES.PRODUTO_OPTIONS,
-      CONSTANTS.VALUES.DEFAULT_PRODUTO,
+      productChoices,
+      defaultProductId,
       CONSTANTS.STORAGE.NEW_TICKET_PRODUTO,
     );
     formContainer.appendChild(produtoField.wrapper);
@@ -1162,14 +1181,14 @@ export class NewTicketUIFactory {
       try {
         await this.executeNewTicketCreation(overlay, modalBody, {
           contato: selectedContact,
-          origem: origemField.select.value,
+          origemId: Number(origemField.select.value),
           tipo: tipoInput.value,
           service: selectedService,
-          status: statusField.select.value,
-          prioridade: prioridadeField.select.value,
+          statusId: Number(statusField.select.value),
+          prioridadeId: Number(prioridadeField.select.value),
           grupoId: grupoSelect.value,
           agenteId: agenteSelect.value,
-          produto: produtoField.select.value,
+          produtoId: Number(produtoField.select.value),
           assunto: assuntoInput.value.trim(),
           descricao: descTextarea.value.trim(),
         });
@@ -1204,21 +1223,47 @@ export class NewTicketUIFactory {
             CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS,
           ],
           (result) => {
-            // Restore Origem
+            // Restore Origem (handles both numeric ID and legacy string label)
             const savedOrigem = result[CONSTANTS.STORAGE.NEW_TICKET_ORIGEM];
-            if (savedOrigem && typeof savedOrigem === 'string') origemField.select.value = savedOrigem;
+            if (savedOrigem) {
+              const savedStr = String(savedOrigem);
+              // Try direct value match (numeric ID as string)
+              if (Array.from(origemField.select.options).some(o => o.value === savedStr)) {
+                origemField.select.value = savedStr;
+              } else {
+                // Legacy: match by label text (old saves stored label strings)
+                const match = Array.from(origemField.select.options).find(o => o.textContent === savedStr);
+                if (match) origemField.select.value = match.value;
+              }
+            }
 
             // Restore Tipo
             const savedTipo = result[CONSTANTS.STORAGE.NEW_TICKET_TIPO];
             if (savedTipo && typeof savedTipo === 'string') tipoInput.value = savedTipo;
 
-            // Restore Status
+            // Restore Status (handles both numeric ID and legacy string label)
             const savedStatus = result[CONSTANTS.STORAGE.NEW_TICKET_STATUS];
-            if (savedStatus && typeof savedStatus === 'string') statusField.select.value = savedStatus;
+            if (savedStatus) {
+              const savedStr = String(savedStatus);
+              if (Array.from(statusField.select.options).some(o => o.value === savedStr)) {
+                statusField.select.value = savedStr;
+              } else {
+                const match = Array.from(statusField.select.options).find(o => o.textContent === savedStr);
+                if (match) statusField.select.value = match.value;
+              }
+            }
 
-            // Restore Prioridade
+            // Restore Prioridade (handles both numeric ID and legacy string label)
             const savedPrioridade = result[CONSTANTS.STORAGE.NEW_TICKET_PRIORIDADE];
-            if (savedPrioridade && typeof savedPrioridade === 'string') prioridadeField.select.value = savedPrioridade;
+            if (savedPrioridade) {
+              const savedStr = String(savedPrioridade);
+              if (Array.from(prioridadeField.select.options).some(o => o.value === savedStr)) {
+                prioridadeField.select.value = savedStr;
+              } else {
+                const match = Array.from(prioridadeField.select.options).find(o => o.textContent === savedStr);
+                if (match) prioridadeField.select.value = match.value;
+              }
+            }
 
             // Restore Grupo (and trigger agent loading)
             const savedGrupo = result[CONSTANTS.STORAGE.NEW_TICKET_GRUPO];
@@ -1227,9 +1272,17 @@ export class NewTicketUIFactory {
               grupoSelect.dispatchEvent(new Event('change'));
             }
 
-            // Restore Produto
+            // Restore Produto (handles both numeric ID and legacy string label)
             const savedProduto = result[CONSTANTS.STORAGE.NEW_TICKET_PRODUTO];
-            if (savedProduto && typeof savedProduto === 'string') produtoField.select.value = savedProduto;
+            if (savedProduto) {
+              const savedStr = String(savedProduto);
+              if (Array.from(produtoField.select.options).some(o => o.value === savedStr)) {
+                produtoField.select.value = savedStr;
+              } else {
+                const match = Array.from(produtoField.select.options).find(o => o.textContent === savedStr);
+                if (match) produtoField.select.value = match.value;
+              }
+            }
 
             // Restore level filter preferences
             const savedLevels = result[CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS];
@@ -1311,14 +1364,14 @@ export class NewTicketUIFactory {
     modalBody: HTMLElement,
     formData: {
       contato: { id: number; name: string; email: string };
-      origem: string;
+      origemId: number;
       tipo: string;
       service: { n1: string; n2: string; n3: string };
-      status: string;
-      prioridade: string;
+      statusId: number;
+      prioridadeId: number;
       grupoId: string;
       agenteId: string;
-      produto: string;
+      produtoId: number;
       assunto: string;
       descricao: string;
     },
@@ -1354,44 +1407,20 @@ export class NewTicketUIFactory {
       animationData: loaderJson,
     });
 
-    // ─── Map form values to Freshdesk API status/priority codes ──────────
-    const statusMap: Record<string, number> = {
-      'Aberto': 2,
-      'Em atendimento': 7,
-      'Pendente': 3,
-      'Resolvido': 4,
-      'Fechado': 5,
-    };
-
-    const prioridadeMap: Record<string, number> = {
-      'Baixa': 1,
-      'Média': 2,
-      'Alta': 3,
-      'Urgente': 4,
-    };
-
-    const origemMap: Record<string, number> = {
-      'E-mail': 1,
-      'Portal': 2,
-      'Telefone': 3,
-      'Fórum': 4,
-      'Chat': 7,
-      'Interno': 100,
-      'Observação': 101,
-      'Feedback': 102,
-    };
 
     try {
       // ─── Build the API payload ────────────────────────────────────────
+      // Numeric IDs are passed directly from the select values, which now
+      // carry the API IDs parsed by LookupService. No hardcoded maps needed.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const payload: Record<string, any> = {
         subject: formData.assunto,
         description: formData.descricao,
         requester_id: formData.contato.id,
         type: formData.tipo,
-        status: statusMap[formData.status] || 2,
-        priority: prioridadeMap[formData.prioridade] || 1,
-        source: origemMap[formData.origem] || 100,
+        status: formData.statusId,
+        priority: formData.prioridadeId,
+        source: formData.origemId,
         custom_fields: {
           cf_servio_nvel_1: formData.service.n1,
           cf_servio_nvel_2: formData.service.n2,
@@ -1404,25 +1433,9 @@ export class NewTicketUIFactory {
       if (formData.agenteId) payload.responder_id = Number(formData.agenteId);
       if (formData.contato.email) payload.email = formData.contato.email;
 
-      // Map product name to product_id
-      // We'll try to find the product ID from the page's prefetched data
-      if (formData.produto) {
-        try {
-          const prodRes = await fetch('/api/v2/products');
-          if (prodRes.ok) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const products = (await prodRes.json()) as any[];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const matchedProduct = products.find((p: any) =>
-              p.name?.toLowerCase() === formData.produto.toLowerCase(),
-            );
-            if (matchedProduct) {
-              payload.product_id = matchedProduct.id;
-            }
-          }
-        } catch (e) {
-          console.log('[Atlas Comet] Erro ao buscar produto, continuando sem product_id:', e);
-        }
+      // Product ID is already a numeric ID from LookupService
+      if (formData.produtoId) {
+        payload.product_id = formData.produtoId;
       }
 
       console.log('[Atlas Comet] New Ticket payload:', JSON.stringify(payload, null, 2));

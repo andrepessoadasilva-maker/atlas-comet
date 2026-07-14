@@ -69,24 +69,26 @@ export const CONSTANTS = {
     /** CSS selector for the ticket subject heading element in Freshdesk's DOM */
     SUBJECT_HEADING_SELECTOR: '.ticket-subject-heading',
 
-    // ─── New Ticket Page Defaults ─────────────────────────────────────
-    /** Default value for the "Origem" field on the New Ticket form */
-    DEFAULT_ORIGEM: 'Interno',
-    /** Default value for the "Status" field on the New Ticket form */
-    DEFAULT_STATUS: 'Aberto',
-    /** Default value for the "Prioridade" field on the New Ticket form */
-    DEFAULT_PRIORIDADE: 'Baixa',
-    /** Default value for the "Produto" field on the New Ticket form */
-    DEFAULT_PRODUTO: 'CV CRM',
+    // ─── New Ticket Page Defaults (API ID Fallbacks) ──────────────────
+    // These numeric IDs are used as fallbacks when the LookupService cannot
+    // determine the correct default from API data. They match Freshdesk's
+    // standard API values for the Portuguese locale.
 
-    /** Status options for the New Ticket form */
-    STATUS_OPTIONS: ['Aberto', 'Em atendimento', 'Pendente', 'Resolvido', 'Fechado'] as readonly string[],
-    /** Priority options for the New Ticket form */
-    PRIORIDADE_OPTIONS: ['Baixa', 'Média', 'Alta', 'Urgente'] as readonly string[],
-    /** Product options for the New Ticket form */
-    PRODUTO_OPTIONS: ['CV CRM', 'Anapro', 'Avendre'] as readonly string[],
-    /** Origin options for the New Ticket form */
-    ORIGEM_OPTIONS: ['Interno', 'Telefone', 'Attemics'] as readonly string[],
+    /** Default numeric ID for "Origem" (Interno = 100 in Freshdesk's source enum) */
+    DEFAULT_ORIGEM_ID: 100,
+    /** Default numeric ID for "Status" (Aberto = 2 in Freshdesk's status enum) */
+    DEFAULT_STATUS_ID: 2,
+    /** Default numeric ID for "Prioridade" (Baixa = 1 in Freshdesk's priority enum) */
+    DEFAULT_PRIORIDADE_ID: 1,
+
+    /**
+     * Labels of Origem (Source) options to display in the New Ticket modal.
+     * While the full list comes from the API, only these entries are shown
+     * to agents (business rule). The filter is case-insensitive and matches
+     * by normalized label. If the API returns new sources matching these
+     * labels, they are automatically included.
+     */
+    ORIGEM_DISPLAY_FILTER: ['Interno', 'Telefone', 'Attemics'] as readonly string[],
   },
 
   // Freshdesk Internal API Endpoints

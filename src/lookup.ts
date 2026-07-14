@@ -2,8 +2,16 @@
  * Lookup Service Module
  *
  * Purpose:
- * Provides a strongly-typed interface for querying the dynamically fetched lookup table
- * of Freshdesk Serviço Nível options and Tipos.
+ * Provides a strongly-typed interface for querying ALL dynamically fetched
+ * Freshdesk ticket fields — including Serviço Nível hierarchy, Tipo, Grupo,
+ * Origem (Source), Status, Prioridade (Priority), and Produto (Product).
+ *
+ * Architecture:
+ * All data is sourced from a single API call to `GET /api/v2/ticket_fields`.
+ * The response contains every field definition with its valid choices and IDs.
+ * This module parses, caches (12h TTL via chrome.storage.local), and exposes
+ * type-safe getters for each field. By centralizing field data here, we
+ * eliminate hardcoded option lists throughout the codebase.
  */
 
 import { FreshdeskAPI } from './api';
@@ -34,15 +42,60 @@ export interface TipoEntry {
   choice_id?: number;
 }
 
+/**
+ * Represents a single choice option for a standard Freshdesk field
+ * (Source, Status, Priority, Product). Contains both the human-readable
+ * label and the numeric ID required by the Freshdesk API.
+ *
+ * Used by:
+ * - NewTicketUIFactory to populate dropdown <select> elements dynamically
+ * - Ticket creation payload builder to send correct numeric IDs
+ */
+export interface FieldChoice {
+  /** Human-readable label as shown in Freshdesk's UI (e.g., "Interno", "Aberto") */
+  label: string;
+  /** Numeric ID expected by the Freshdesk API (e.g., 100 for Interno, 2 for Aberto) */
+  value: number;
+}
+
 // ─── Internal State ──────────────────────────────────────────────────────────
 
 let lookupMap: Map<number, LookupEntry> = new Map();
 let tipoList: TipoEntry[] = [];
 let groupList: { id: number; name: string }[] = [];
+
+/**
+ * Dynamically parsed field choices from the Freshdesk ticket_fields API.
+ * These replace the previously hardcoded arrays in constants.ts, ensuring
+ * the extension always reflects the actual Freshdesk configuration.
+ */
+let sourceList: FieldChoice[] = [];   // Origem (Source)
+let statusList: FieldChoice[] = [];   // Status
+let priorityList: FieldChoice[] = []; // Prioridade (Priority)
+let productList: FieldChoice[] = [];  // Produto (Product)
+
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
 
-// ─── Service Class ───────────────────────────────────────────────────────────
+// ─── Cache Payload Type ───────────────────────────────────────────────────────
+
+/**
+ * Represents the full shape of the v3 cache payload stored in chrome.storage.local.
+ * V3 adds sources, statuses, priorities, and products to the existing v2 schema.
+ * The optional markers (?) ensure backwards compatibility with stale v2 caches.
+ */
+interface CachePayload {
+  timestamp: number;
+  lookup: [number, LookupEntry][];
+  tipos: TipoEntry[];
+  groups: { id: number; name: string }[];
+  sources?: FieldChoice[];
+  statuses?: FieldChoice[];
+  priorities?: FieldChoice[];
+  products?: FieldChoice[];
+}
+
+// ─── Service Class ─────────────────────────────────────────────────────────────
 
 export class LookupService {
   private static readonly MAX_RESULTS = 15;
@@ -69,6 +122,43 @@ export class LookupService {
     return domGroups;
   }
 
+  // ─── Dynamic Field Getters ──────────────────────────────────────────────────
+  // These return choices parsed from the Freshdesk API, replacing hardcoded arrays.
+
+  /**
+   * Returns all available Source (Origem) choices from the Freshdesk API.
+   * Each entry contains a human-readable label and the numeric API ID.
+   * Example: [{ label: 'Interno', value: 100 }, { label: 'Telefone', value: 3 }]
+   */
+  public static getSources(): FieldChoice[] {
+    return sourceList;
+  }
+
+  /**
+   * Returns all available Status choices from the Freshdesk API.
+   * Example: [{ label: 'Aberto', value: 2 }, { label: 'Pendente', value: 3 }]
+   */
+  public static getStatuses(): FieldChoice[] {
+    return statusList;
+  }
+
+  /**
+   * Returns all available Priority (Prioridade) choices from the Freshdesk API.
+   * Example: [{ label: 'Baixa', value: 1 }, { label: 'Média', value: 2 }]
+   */
+  public static getPriorities(): FieldChoice[] {
+    return priorityList;
+  }
+
+  /**
+   * Returns all available Product (Produto) choices from the Freshdesk API.
+   * Each entry contains the product name and its numeric ID.
+   * Example: [{ label: 'CV CRM', value: 42 }]
+   */
+  public static getProducts(): FieldChoice[] {
+    return productList;
+  }
+
   /**
    * Initializes the LookupService by loading fields from local cache or
    * fetching them from the Freshdesk API.
@@ -80,9 +170,12 @@ export class LookupService {
     initPromise = (async () => {
       try {
         if (!force) {
-          const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[] } | null;
+          const cached = (await this.getFromCache()) as CachePayload | null;
           if (cached && !this.isCacheExpired(cached.timestamp)) {
-            this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || []);
+            this.buildMapFromCache(
+              cached.lookup, cached.tipos, cached.groups || [],
+              cached.sources, cached.statuses, cached.priorities, cached.products,
+            );
             isInitialized = true;
             return;
           }
@@ -99,11 +192,14 @@ export class LookupService {
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('[Atlas Comet] Erro ao inicializar LookupService:', error);
-        const cached = (await this.getFromCache()) as { timestamp: number; lookup: [number, LookupEntry][]; tipos: TipoEntry[]; groups: { id: number; name: string }[] } | null;
+        const cached = (await this.getFromCache()) as CachePayload | null;
         if (cached) {
           // eslint-disable-next-line no-console
           console.log('[Atlas Comet] Usando cache expirado devido a falha na API.');
-          this.buildMapFromCache(cached.lookup, cached.tipos, cached.groups || []);
+          this.buildMapFromCache(
+            cached.lookup, cached.tipos, cached.groups || [],
+            cached.sources, cached.statuses, cached.priorities, cached.products,
+          );
           isInitialized = true;
         } else {
           throw error;
@@ -125,6 +221,10 @@ export class LookupService {
     lookupMap.clear();
     tipoList = [];
     groupList = [];
+    sourceList = [];
+    statusList = [];
+    priorityList = [];
+    productList = [];
     this.cachedLeaves = null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,7 +240,7 @@ export class LookupService {
       throw new Error('Formato de campos inválido retornado pela API');
     }
 
-    // 1. Parse Tipo do Ticket
+    // ─── 1. Parse Tipo do Ticket ──────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tipoField = fieldsArray.find((f: any) => f.name === 'ticket_type' || f.label === 'Tipo');
     if (tipoField && tipoField.choices) {
@@ -163,7 +263,7 @@ export class LookupService {
       }
     }
 
-    // Parse Groups
+    // ─── 2. Parse Groups ──────────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const groupField = fieldsArray.find((f: any) => f.name === 'group_id' || f.name === 'group');
     if (groupField && groupField.choices) {
@@ -195,7 +295,90 @@ export class LookupService {
       }
     }
 
-    // 2. Parse Serviço Nível (Hierarchical - Freshdesk uses nested dictionaries/arrays)
+    // ─── 3. Parse Standard Fields (Source, Status, Priority, Product) ─────
+    // These fields follow Freshdesk's standard choice format: either
+    //   - An object { "Label": id, ... } (V2 API format)
+    //   - An array of ["label", id] tuples (V1 API format)
+    //   - An array of { value: "label", id: number } objects
+    // We handle all formats for maximum compatibility.
+
+    /**
+     * Generic parser for standard Freshdesk field choices.
+     * Handles the 3 known formats that the ticket_fields API returns.
+     *
+     * @param choices - The raw choices data from the API field definition.
+     * @returns Array of FieldChoice with label and numeric value.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parseStandardChoices = (choices: any): FieldChoice[] => {
+      const result: FieldChoice[] = [];
+
+      if (Array.isArray(choices)) {
+        for (const c of choices) {
+          if (Array.isArray(c) && c.length >= 2) {
+            // Format: [["Aberto", 2], ["Pendente", 3]]
+            result.push({
+              label: String(c[0]),
+              value: typeof c[1] === 'number' ? c[1] : parseInt(String(c[1]), 10),
+            });
+          } else if (c && typeof c === 'object') {
+            // Format: [{ value: "Aberto", id: 2 }] or [{ label: "Aberto", id: 2 }]
+            const label = c.value || c.label || c.name || '';
+            const id = c.id || c.choice_id || 0;
+            if (label && id) result.push({ label: String(label), value: Number(id) });
+          } else if (typeof c === 'string') {
+            // Format: ["Aberto", "Pendente"] — no IDs available, skip
+            // (This shouldn't happen for source/status/priority but handle gracefully)
+            result.push({ label: c, value: 0 });
+          }
+        }
+      } else if (choices && typeof choices === 'object') {
+        // Format: { "Aberto": 2, "Pendente": 3, ... }
+        for (const [key, val] of Object.entries(choices)) {
+          const id = typeof val === 'number' ? val : parseInt(String(val), 10);
+          if (key && !isNaN(id)) {
+            result.push({ label: key, value: id });
+          }
+        }
+      }
+
+      return result;
+    };
+
+    // Parse Source (Origem) field
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sourceField = fieldsArray.find((f: any) => f.name === 'source' || f.label === 'Origem');
+    if (sourceField && sourceField.choices) {
+      sourceList = parseStandardChoices(sourceField.choices);
+      console.log(`[Atlas Comet] Origem: ${sourceList.length} opções parseadas da API`);
+    }
+
+    // Parse Status field
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const statusField = fieldsArray.find((f: any) => f.name === 'status' || f.label === 'Status');
+    if (statusField && statusField.choices) {
+      statusList = parseStandardChoices(statusField.choices);
+      console.log(`[Atlas Comet] Status: ${statusList.length} opções parseadas da API`);
+    }
+
+    // Parse Priority (Prioridade) field
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const priorityField = fieldsArray.find((f: any) => f.name === 'priority' || f.label === 'Prioridade');
+    if (priorityField && priorityField.choices) {
+      priorityList = parseStandardChoices(priorityField.choices);
+      console.log(`[Atlas Comet] Prioridade: ${priorityList.length} opções parseadas da API`);
+    }
+
+    // Parse Product (Produto) field
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const productField = fieldsArray.find((f: any) => f.name === 'product_id' || f.name === 'product' || f.label === 'Produto');
+    if (productField && productField.choices) {
+      productList = parseStandardChoices(productField.choices);
+      console.log(`[Atlas Comet] Produto: ${productList.length} opções parseadas da API`);
+    }
+
+    // ─── 4. Parse Serviço Nível (Hierarchical) ────────────────────────────
+    // Freshdesk uses nested dictionaries/arrays for hierarchical custom fields
     const servicoField = fieldsArray.find(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (f: any) =>
@@ -279,6 +462,13 @@ export class LookupService {
   }
 
   // ─── Cache Management ────────────────────────────────────────────────────────
+  //
+  // Cache version v3 includes the 4 new dynamic field lists (source, status,
+  // priority, product) in addition to the existing lookup/tipos/groups.
+  // The v2 cache key is kept for backwards compatibility detection.
+
+  /** Storage key for the unified fields cache (v3 includes all field types) */
+  private static readonly CACHE_KEY = 'atlas_fields_cache_v3';
 
   private static async getFromCache(): Promise<unknown> {
     return new Promise((resolve) => {
@@ -286,8 +476,8 @@ export class LookupService {
         resolve(null);
         return;
       }
-      chrome.storage.local.get('atlas_fields_cache_v2', (res) => {
-        resolve(res.atlas_fields_cache_v2 || null);
+      chrome.storage.local.get(this.CACHE_KEY, (res) => {
+        resolve(res[this.CACHE_KEY] || null);
       });
     });
   }
@@ -302,9 +492,13 @@ export class LookupService {
       lookup: lookupArray,
       tipos: tipoList,
       groups: groupList,
+      sources: sourceList,
+      statuses: statusList,
+      priorities: priorityList,
+      products: productList,
     };
     return new Promise((resolve) => {
-      chrome.storage.local.set({ atlas_fields_cache_v2: cacheData }, resolve);
+      chrome.storage.local.set({ [this.CACHE_KEY]: cacheData }, resolve);
     });
   }
 
@@ -313,14 +507,26 @@ export class LookupService {
     return Date.now() - timestamp > CACHE_TTL_MS;
   }
 
+  /**
+   * Rebuilds all internal state from a previously cached payload.
+   * Handles both v2 caches (missing new fields) and v3 caches (complete).
+   */
   private static buildMapFromCache(
     cachedLookup: [number, LookupEntry][],
     cachedTipos: TipoEntry[],
     cachedGroups: { id: number; name: string }[],
+    cachedSources?: FieldChoice[],
+    cachedStatuses?: FieldChoice[],
+    cachedPriorities?: FieldChoice[],
+    cachedProducts?: FieldChoice[],
   ): void {
     lookupMap = new Map(cachedLookup);
     tipoList = cachedTipos || [];
     groupList = cachedGroups || [];
+    sourceList = cachedSources || [];
+    statusList = cachedStatuses || [];
+    priorityList = cachedPriorities || [];
+    productList = cachedProducts || [];
     this.cachedLeaves = null;
   }
 

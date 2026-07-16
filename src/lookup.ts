@@ -296,15 +296,53 @@ export class LookupService {
     }
 
     // ─── 3. Parse Standard Fields (Source, Status, Priority, Product) ─────
-    // These fields follow Freshdesk's standard choice format: either
-    //   - An object { "Label": id, ... } (V2 API format)
-    //   - An array of ["label", id] tuples (V1 API format)
-    //   - An array of { value: "label", id: number } objects
-    // We handle all formats for maximum compatibility.
+    // These fields follow Freshdesk's standard choice format. The V2 API can
+    // return choices in TWO object layouts:
+    //   A) { "Label": id }          — label is the key, numeric ID is the value
+    //   B) { "id": "Label" }        — numeric ID (as string) is the key, label is the value
+    // Format B is commonly seen for Status and Priority fields.
+    // We also handle array formats for maximum compatibility:
+    //   C) [["label", id], ...]      — tuple arrays (V1 API)
+    //   D) [{ value: "label", id }, ...]  — object arrays
+
+    /**
+     * Translation map for Freshdesk field labels from English to Portuguese.
+     * Applied as post-processing after parsing to ensure the UI always shows
+     * labels in Portuguese regardless of the API locale. Keys are lowercase
+     * English labels; values are the Portuguese translations.
+     */
+    const EN_TO_PT_LABELS: Record<string, string> = {
+      // Priority labels
+      'low': 'Baixa',
+      'medium': 'Média',
+      'high': 'Alta',
+      'urgent': 'Urgente',
+      // Status labels
+      'open': 'Aberto',
+      'pending': 'Pendente',
+      'resolved': 'Resolvido',
+      'closed': 'Fechado',
+      'waiting on customer': 'Aguardando Cliente',
+      'waiting on third party': 'Aguardando Terceiro',
+    };
+
+    /**
+     * Translates a field label from English to Portuguese using the
+     * EN_TO_PT_LABELS map. If no translation is found, returns the
+     * original label unchanged (this preserves any custom statuses
+     * that may already be in Portuguese or have no translation).
+     *
+     * @param label - The original label string from the API.
+     * @returns The Portuguese translation, or the original label.
+     */
+    const translateLabel = (label: string): string => {
+      return EN_TO_PT_LABELS[label.toLowerCase()] || label;
+    };
 
     /**
      * Generic parser for standard Freshdesk field choices.
-     * Handles the 3 known formats that the ticket_fields API returns.
+     * Handles all known formats that the ticket_fields API returns,
+     * including the inverted key-value object format from V2.
      *
      * @param choices - The raw choices data from the API field definition.
      * @returns Array of FieldChoice with label and numeric value.
@@ -316,28 +354,35 @@ export class LookupService {
       if (Array.isArray(choices)) {
         for (const c of choices) {
           if (Array.isArray(c) && c.length >= 2) {
-            // Format: [["Aberto", 2], ["Pendente", 3]]
+            // Format C: [["Aberto", 2], ["Pendente", 3]]
             result.push({
               label: String(c[0]),
               value: typeof c[1] === 'number' ? c[1] : parseInt(String(c[1]), 10),
             });
           } else if (c && typeof c === 'object') {
-            // Format: [{ value: "Aberto", id: 2 }] or [{ label: "Aberto", id: 2 }]
+            // Format D: [{ value: "Aberto", id: 2 }] or [{ label: "Aberto", id: 2 }]
             const label = c.value || c.label || c.name || '';
             const id = c.id || c.choice_id || 0;
             if (label && id) result.push({ label: String(label), value: Number(id) });
           } else if (typeof c === 'string') {
-            // Format: ["Aberto", "Pendente"] — no IDs available, skip
-            // (This shouldn't happen for source/status/priority but handle gracefully)
+            // Format: ["Aberto", "Pendente"] — no IDs available
             result.push({ label: c, value: 0 });
           }
         }
       } else if (choices && typeof choices === 'object') {
-        // Format: { "Aberto": 2, "Pendente": 3, ... }
         for (const [key, val] of Object.entries(choices)) {
-          const id = typeof val === 'number' ? val : parseInt(String(val), 10);
-          if (key && !isNaN(id)) {
-            result.push({ label: key, value: id });
+          const keyAsNumber = parseInt(key, 10);
+          const valAsNumber = typeof val === 'number' ? val : parseInt(String(val), 10);
+
+          if (!isNaN(keyAsNumber) && typeof val === 'string') {
+            // Format B (inverted): { "2": "Open", "3": "Pending" }
+            // Key is the numeric ID (as string), value is the label.
+            // This is the format returned by Freshdesk V2 for Status and Priority.
+            result.push({ label: String(val), value: keyAsNumber });
+          } else if (key && !isNaN(valAsNumber)) {
+            // Format A (standard): { "Aberto": 2, "Pendente": 3 }
+            // Key is the label, value is the numeric ID.
+            result.push({ label: key, value: valAsNumber });
           }
         }
       }
@@ -353,20 +398,28 @@ export class LookupService {
       console.log(`[Atlas Comet] Origem: ${sourceList.length} opções parseadas da API`);
     }
 
-    // Parse Status field
+    // Parse Status field — apply EN→PT translation to labels since the
+    // V2 API returns English labels ("Open", "Pending", etc.)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const statusField = fieldsArray.find((f: any) => f.name === 'status' || f.label === 'Status');
     if (statusField && statusField.choices) {
-      statusList = parseStandardChoices(statusField.choices);
-      console.log(`[Atlas Comet] Status: ${statusList.length} opções parseadas da API`);
+      statusList = parseStandardChoices(statusField.choices).map((c) => ({
+        ...c,
+        label: translateLabel(c.label),
+      }));
+      console.log(`[Atlas Comet] Status: ${statusList.length} opções parseadas da API`, statusList);
     }
 
-    // Parse Priority (Prioridade) field
+    // Parse Priority (Prioridade) field — apply EN→PT translation to labels
+    // since the V2 API returns English labels ("Low", "Medium", etc.)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const priorityField = fieldsArray.find((f: any) => f.name === 'priority' || f.label === 'Prioridade');
     if (priorityField && priorityField.choices) {
-      priorityList = parseStandardChoices(priorityField.choices);
-      console.log(`[Atlas Comet] Prioridade: ${priorityList.length} opções parseadas da API`);
+      priorityList = parseStandardChoices(priorityField.choices).map((c) => ({
+        ...c,
+        label: translateLabel(c.label),
+      }));
+      console.log(`[Atlas Comet] Prioridade: ${priorityList.length} opções parseadas da API`, priorityList);
     }
 
     // Parse Product (Produto) field

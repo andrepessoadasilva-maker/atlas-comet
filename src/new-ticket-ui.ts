@@ -946,13 +946,88 @@ export class NewTicketUIFactory {
         console.log(`[Atlas Comet] Buscando agentes para o grupo: ${groupName} (ID: ${groupId})`);
         
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let realAgents: any[] = [];
+        const realAgents: any[] = [];
+
+        // ─── Strategy 1: GET /api/v2/groups/{id} → extract agent_ids ──────
+        // The Freshdesk V2 API does NOT support ?group_id= as a filter on
+        // the agents list endpoint. Instead, we fetch the group details first
+        // to get the agent_ids array, then fetch each agent individually.
         try {
+          console.log(`[Atlas Comet] Tentativa 1: Buscando detalhes do grupo ${groupId}...`);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const res = await FreshdeskAPI.sendBridgeRequest(`/api/v2/agents?group_id=${groupId}`, 'GET') as any;
-          realAgents = Array.isArray(res) ? res : (res.agents || []);
+          const groupData = await FreshdeskAPI.sendBridgeRequest(`/api/v2/groups/${groupId}`, 'GET') as any;
+          
+          // The V2 groups endpoint returns agent_ids as an array of numeric IDs
+          const agentIds: number[] = groupData?.agent_ids || groupData?.group?.agent_ids || [];
+          console.log(`[Atlas Comet] Grupo ${groupId} contém ${agentIds.length} agentes:`, agentIds);
+
+          if (agentIds.length > 0) {
+            // Fetch each agent's details in parallel (limited to 20 concurrent)
+            const batchSize = 20;
+            for (let i = 0; i < agentIds.length; i += batchSize) {
+              const batch = agentIds.slice(i, i + batchSize);
+              const batchResults = await Promise.allSettled(
+                batch.map((aid) =>
+                  FreshdeskAPI.sendBridgeRequest(`/api/v2/agents/${aid}`, 'GET'),
+                ),
+              );
+              for (const result of batchResults) {
+                if (result.status === 'fulfilled' && result.value) {
+                  realAgents.push(result.value);
+                }
+              }
+            }
+            console.log(`[Atlas Comet] Tentativa 1 bem-sucedida: ${realAgents.length} agentes carregados.`);
+          }
         } catch (e) {
-          console.warn('[Atlas Comet] Falha ao buscar IDs de agentes da API V2', e);
+          console.warn('[Atlas Comet] Tentativa 1 falhou (GET groups/{id}):', e);
+        }
+
+        // ─── Strategy 2 (Fallback): Fetch all agents, filter by group_ids ─
+        // If strategy 1 failed or returned no agents, fall back to fetching
+        // all agents with pagination and filtering locally by group_ids array.
+        if (realAgents.length === 0) {
+          try {
+            console.log('[Atlas Comet] Tentativa 2: Buscando todos os agentes com paginação...');
+            const groupIdNum = Number(groupId);
+            let page = 1;
+            let hasMore = true;
+
+            while (hasMore) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const pageResult = await FreshdeskAPI.sendBridgeRequest(
+                `/api/v2/agents?per_page=100&page=${page}`, 'GET',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ) as any;
+
+              const agentsPage = Array.isArray(pageResult)
+                ? pageResult
+                : (pageResult?.agents || []);
+
+              if (agentsPage.length === 0) {
+                hasMore = false;
+              } else {
+                // Filter agents that belong to the selected group
+                // Each agent has a group_ids array (e.g., [1234, 5678])
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const matching = agentsPage.filter((a: any) => {
+                  const groups: number[] = a.group_ids || [];
+                  return groups.includes(groupIdNum);
+                });
+                realAgents.push(...matching);
+
+                // Stop paginating if we got fewer than 100 (last page)
+                hasMore = agentsPage.length >= 100;
+                page++;
+
+                // Safety: don't paginate more than 20 pages (2000 agents max)
+                if (page > 20) hasMore = false;
+              }
+            }
+            console.log(`[Atlas Comet] Tentativa 2 finalizada: ${realAgents.length} agentes encontrados para o grupo ${groupId}.`);
+          } catch (e2) {
+            console.warn('[Atlas Comet] Tentativa 2 falhou (paginação completa):', e2);
+          }
         }
 
         while (agenteSelect.firstChild) agenteSelect.removeChild(agenteSelect.firstChild);
@@ -963,9 +1038,9 @@ export class NewTicketUIFactory {
         agenteSelect.appendChild(emptyOpt);
 
         if (realAgents.length === 0) {
-          console.warn('[Atlas Comet] Nenhum agente encontrado na API para este grupo.');
+          console.warn('[Atlas Comet] Nenhum agente encontrado para este grupo após todas as tentativas.');
         } else {
-          // Map real agents to our final list format
+          // Map agents to our final list format
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const finalAgents = realAgents.map((ra: any) => {
             return {

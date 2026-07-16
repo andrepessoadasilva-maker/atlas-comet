@@ -948,86 +948,66 @@ export class NewTicketUIFactory {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const realAgents: any[] = [];
 
-        // ─── Strategy 1: Fetch all agents with pagination, filter by group_ids ─
-        // The Freshdesk V2 agent list endpoint does not require admin permissions
-        // and each agent object includes a `group_ids` array. We paginate through
-        // all agents and filter locally for the selected group.
+        // ─── Strategy 1: Internal API with group filter ──────────────────
+        // The internal Freshdesk API (/api/_/) uses the same session cookies
+        // as the logged-in agent's browser session, so it works without
+        // admin-level API permissions. Unlike the V2 API, the internal agents
+        // endpoint supports direct group_id filtering.
         try {
-          console.log(`[Atlas Comet] Tentativa 1: Buscando agentes via paginação e filtrando por grupo ${groupId}...`);
-          const groupIdNum = Number(groupId);
-          let page = 1;
-          let hasMore = true;
-
-          while (hasMore) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const pageResult = await FreshdeskAPI.sendBridgeRequest(
-              `/api/v2/agents?per_page=100&page=${page}`, 'GET',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ) as any;
-
-            const agentsPage = Array.isArray(pageResult)
-              ? pageResult
-              : (pageResult?.agents || []);
-
-            if (agentsPage.length === 0) {
-              hasMore = false;
-            } else {
-              // Filter agents that belong to the selected group
-              // Each agent has a group_ids array (e.g., [1234, 5678])
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const matching = agentsPage.filter((a: any) => {
-                const groups: number[] = a.group_ids || [];
-                return groups.includes(groupIdNum);
-              });
-              realAgents.push(...matching);
-
-              // Stop paginating if we got fewer than 100 (last page)
-              hasMore = agentsPage.length >= 100;
-              page++;
-
-              // Safety: don't paginate more than 20 pages (2000 agents max)
-              if (page > 20) hasMore = false;
-            }
+          console.log(`[Atlas Comet] Tentativa 1: GET /api/_/agents?group_id=${groupId}...`);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res = await FreshdeskAPI.sendBridgeRequest(`/api/_/agents?group_id=${groupId}`, 'GET') as any;
+          
+          // The internal API may return agents in various structures
+          const agents = Array.isArray(res) ? res : (res?.agents || []);
+          if (agents.length > 0) {
+            realAgents.push(...agents);
+            console.log(`[Atlas Comet] Tentativa 1 bem-sucedida: ${realAgents.length} agentes encontrados.`);
           }
-          console.log(`[Atlas Comet] Tentativa 1 finalizada: ${realAgents.length} agentes encontrados para o grupo ${groupId}.`);
         } catch (e) {
-          console.warn('[Atlas Comet] Tentativa 1 falhou (paginação de agentes):', e);
+          console.warn('[Atlas Comet] Tentativa 1 falhou (GET /api/_/agents):', e);
         }
 
-        // ─── Strategy 2 (Fallback): GET /api/v2/groups/{id} → agent_ids ───
-        // If paginated listing failed, try the group details endpoint to get
-        // agent_ids and fetch each agent individually. Note: this endpoint may
-        // require admin-level permissions and return 403 for regular agents.
+        // ─── Strategy 2: Internal group details with agent list ───────────
+        // If strategy 1 failed, fetch the group details via internal API.
+        // The response may include an embedded agent list or agent_ids.
         if (realAgents.length === 0) {
           try {
-            console.log(`[Atlas Comet] Tentativa 2: Buscando detalhes do grupo ${groupId}...`);
+            console.log(`[Atlas Comet] Tentativa 2: GET /api/_/groups/${groupId}...`);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const groupData = await FreshdeskAPI.sendBridgeRequest(`/api/v2/groups/${groupId}`, 'GET') as any;
+            const groupData = await FreshdeskAPI.sendBridgeRequest(`/api/_/groups/${groupId}`, 'GET') as any;
             
-            // The V2 groups endpoint returns agent_ids as an array of numeric IDs
-            const agentIds: number[] = groupData?.agent_ids || groupData?.group?.agent_ids || [];
-            console.log(`[Atlas Comet] Grupo ${groupId} contém ${agentIds.length} agentes:`, agentIds);
+            // The internal groups endpoint may embed agents directly
+            const groupObj = groupData?.group || groupData;
+            const embeddedAgents = groupObj?.agents || [];
 
-            if (agentIds.length > 0) {
-              // Fetch each agent's details in parallel (limited to 20 concurrent)
-              const batchSize = 20;
-              for (let i = 0; i < agentIds.length; i += batchSize) {
-                const batch = agentIds.slice(i, i + batchSize);
-                const batchResults = await Promise.allSettled(
-                  batch.map((aid) =>
-                    FreshdeskAPI.sendBridgeRequest(`/api/v2/agents/${aid}`, 'GET'),
-                  ),
-                );
-                for (const result of batchResults) {
-                  if (result.status === 'fulfilled' && result.value) {
-                    realAgents.push(result.value);
+            if (Array.isArray(embeddedAgents) && embeddedAgents.length > 0) {
+              realAgents.push(...embeddedAgents);
+              console.log(`[Atlas Comet] Tentativa 2 bem-sucedida (agentes embutidos): ${realAgents.length}`);
+            } else {
+              // Alternatively, extract agent_ids and fetch each one from internal API
+              const agentIds: number[] = groupObj?.agent_ids || [];
+              if (agentIds.length > 0) {
+                console.log(`[Atlas Comet] Tentativa 2: Buscando ${agentIds.length} agentes individualmente...`);
+                const batchSize = 20;
+                for (let i = 0; i < agentIds.length; i += batchSize) {
+                  const batch = agentIds.slice(i, i + batchSize);
+                  const batchResults = await Promise.allSettled(
+                    batch.map((aid) =>
+                      FreshdeskAPI.sendBridgeRequest(`/api/_/agents/${aid}`, 'GET'),
+                    ),
+                  );
+                  for (const result of batchResults) {
+                    if (result.status === 'fulfilled' && result.value) {
+                      realAgents.push(result.value);
+                    }
                   }
                 }
+                console.log(`[Atlas Comet] Tentativa 2 finalizada: ${realAgents.length} agentes carregados.`);
               }
-              console.log(`[Atlas Comet] Tentativa 2 bem-sucedida: ${realAgents.length} agentes carregados.`);
             }
           } catch (e2) {
-            console.warn('[Atlas Comet] Tentativa 2 falhou (GET groups/{id}, pode exigir permissão admin):', e2);
+            console.warn('[Atlas Comet] Tentativa 2 falhou (GET /api/_/groups/{id}):', e2);
           }
         }
 

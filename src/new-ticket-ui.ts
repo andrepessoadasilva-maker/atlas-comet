@@ -707,10 +707,25 @@ export class NewTicketUIFactory {
     // ═══════════════════════════════════════════════════════════════════════
     // FIELD 4: Serviço Nível (search with N2/N3 filters)
     // ═══════════════════════════════════════════════════════════════════════
+    const servicoContainer = document.createElement('div');
+    servicoContainer.style.cssText = selectWrapperStyle;
+
+    const servicoLabelRow = document.createElement('div');
+    servicoLabelRow.style.cssText = 'display: flex; align-items: center; margin-bottom: 6px;';
+
     const servicoLabel = document.createElement('label');
     servicoLabel.style.cssText = labelStyle;
-    servicoLabel.textContent = 'Buscar Serviço (Nível 2 ou 3)';
-    formContainer.appendChild(servicoLabel);
+    servicoLabel.textContent = '⭐ Buscar Serviço (Nível 2 ou 3)';
+
+    const servicoMemoBtn = document.createElement('button');
+    servicoMemoBtn.type = 'button';
+    servicoMemoBtn.style.cssText = memoBtnBaseStyle;
+    servicoMemoBtn.innerHTML = bookmarkSvg;
+    servicoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+
+    servicoLabelRow.appendChild(servicoLabel);
+    servicoLabelRow.appendChild(servicoMemoBtn);
+    servicoContainer.appendChild(servicoLabelRow);
 
     const searchWrapper = document.createElement('div');
     searchWrapper.style.cssText = 'position: relative;';
@@ -734,7 +749,7 @@ export class NewTicketUIFactory {
 
     searchWrapper.appendChild(searchIcon);
     searchWrapper.appendChild(searchInput);
-    formContainer.appendChild(searchWrapper);
+    servicoContainer.appendChild(searchWrapper);
 
     searchInput.addEventListener('focus', () => {
       searchInput.style.borderColor = '#02ac85';
@@ -773,7 +788,7 @@ export class NewTicketUIFactory {
 
     filterRow.appendChild(cbN2Label);
     filterRow.appendChild(cbN3Label);
-    formContainer.appendChild(filterRow);
+    servicoContainer.appendChild(filterRow);
 
     // Service results container
     const resultsContainer = document.createElement('ul');
@@ -919,8 +934,40 @@ export class NewTicketUIFactory {
     cbN3.addEventListener('change', runSearch);
     cbN2.addEventListener('change', runSearch);
 
-    formContainer.appendChild(resultsContainer);
-    formContainer.appendChild(selectedServiceBadge);
+    servicoContainer.appendChild(resultsContainer);
+    servicoContainer.appendChild(selectedServiceBadge);
+
+    servicoMemoBtn.addEventListener('mouseenter', () => {
+      if (!servicoMemoBtn.dataset.saved) { servicoMemoBtn.style.borderColor = '#02ac85'; servicoMemoBtn.style.color = '#02ac85'; }
+    });
+    servicoMemoBtn.addEventListener('mouseleave', () => {
+      if (!servicoMemoBtn.dataset.saved) { servicoMemoBtn.style.borderColor = '#ccc'; servicoMemoBtn.style.color = '#777'; }
+    });
+    servicoMemoBtn.addEventListener('click', () => {
+      if (!ContextManager.isValid()) return;
+      if (!selectedService) {
+        showValidationError(searchInput, servicoContainer, 'Selecione um serviço antes de salvar.');
+        return;
+      }
+      chrome.storage.local.set(
+        { 
+          [CONSTANTS.STORAGE.NEW_TICKET_SERVICO]: selectedService,
+          [CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS]: { n3: cbN3.checked, n2: cbN2.checked }
+        },
+        () => {
+          servicoMemoBtn.dataset.saved = 'true';
+          servicoMemoBtn.style.background = '#02ac85'; servicoMemoBtn.style.borderColor = '#02ac85'; servicoMemoBtn.style.color = '#ffffff';
+          servicoMemoBtn.innerHTML = checkSvg; servicoMemoBtn.appendChild(document.createTextNode(' Salvo'));
+          setTimeout(() => {
+            delete servicoMemoBtn.dataset.saved;
+            servicoMemoBtn.style.background = 'transparent'; servicoMemoBtn.style.borderColor = '#ccc'; servicoMemoBtn.style.color = '#777';
+            servicoMemoBtn.innerHTML = bookmarkSvg; servicoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+          }, 2000);
+        },
+      );
+    });
+
+    formContainer.appendChild(servicoContainer);
 
     // ═══════════════════════════════════════════════════════════════════════
     // FIELD 5: Status
@@ -1463,23 +1510,19 @@ export class NewTicketUIFactory {
     btnCreate.onclick = async () => {
       // Validate required fields
       if (!selectedContact) {
-        alert('Por favor, selecione um contato.');
-        contatoInput.focus();
+        showValidationError(contatoInput, contatoWrapper, 'Por favor, selecione um contato.');
         return;
       }
       if (!selectedService) {
-        alert('Por favor, selecione um serviço (Nível 2 ou 3).');
-        searchInput.focus();
+        showValidationError(searchInput, servicoContainer, 'Por favor, selecione um serviço (Nível 2 ou 3).');
         return;
       }
       if (!assuntoInput.value.trim()) {
-        alert('Por favor, preencha o assunto.');
-        assuntoInput.focus();
+        showValidationError(assuntoInput, assuntoWrapper, 'Por favor, preencha o assunto.');
         return;
       }
       if (!descTextarea.value.trim()) {
-        alert('Por favor, preencha a descrição.');
-        descTextarea.focus();
+        showValidationError(descTextarea, descWrapper, 'Por favor, preencha a descrição.');
         return;
       }
 
@@ -1527,6 +1570,7 @@ export class NewTicketUIFactory {
             CONSTANTS.STORAGE.NEW_TICKET_ORIGEM,
             CONSTANTS.STORAGE.NEW_TICKET_CONTATO,
             CONSTANTS.STORAGE.NEW_TICKET_TAG,
+            CONSTANTS.STORAGE.NEW_TICKET_SERVICO,
             CONSTANTS.STORAGE.NEW_TICKET_TIPO,
             CONSTANTS.STORAGE.NEW_TICKET_STATUS,
             CONSTANTS.STORAGE.NEW_TICKET_PRIORIDADE,
@@ -1571,6 +1615,14 @@ export class NewTicketUIFactory {
                 value: savedTag.value,
               };
               tagInput.value = selectedTag.value;
+            }
+
+            // Restore Servico
+            const savedServico = result[CONSTANTS.STORAGE.NEW_TICKET_SERVICO];
+            if (savedServico && typeof savedServico === 'object') {
+              selectedService = savedServico as { n1: string; n2: string; n3: string };
+              selectedServiceBadge.textContent = `✅ Serviço selecionado: ${selectedService.n1} > ${selectedService.n2}${selectedService.n3 ? ' > ' + selectedService.n3 : ''}`;
+              selectedServiceBadge.style.display = 'block';
             }
 
             // Restore Tipo

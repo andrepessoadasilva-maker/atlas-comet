@@ -78,6 +78,36 @@ export const CONSTANTS = {
     DEFAULT_ORIGEM_ID: 100,
     /** Default numeric ID for "Status" (Aberto = 2 in Freshdesk's status enum) */
     DEFAULT_STATUS_ID: 2,
+
+    /**
+     * Hardcoded fallback status list matching the user's Freshdesk instance.
+     * Used when the Freshdesk V2/V1 API returns status choices in a format
+     * that the generic parseStandardChoices parser cannot handle (this is
+     * common for instances with many custom statuses, where the API may
+     * return nested objects or non-standard structures).
+     *
+     * The numeric IDs are Freshdesk's internal status enum values.
+     * Standard: 2=Open, 3=Pending, 4=Resolved, 5=Closed.
+     * Custom statuses start at 6 and are instance-specific.
+     *
+     * IMPORTANT: If new custom statuses are added to the Freshdesk instance,
+     * this list must be updated to include them.
+     */
+    FALLBACK_STATUSES: [
+      { label: 'Aberto', value: 2 },
+      { label: 'Em atendimento', value: 6 },
+      { label: 'Pendente', value: 3 },
+      { label: 'Resolvido', value: 4 },
+      { label: 'Fechado', value: 5 },
+      { label: 'Sugestão de Melhoria', value: 7 },
+      { label: 'Colaborador analisando', value: 8 },
+      { label: 'Colaborador analisou', value: 9 },
+      { label: 'Colaborador Respondeu', value: 10 },
+      { label: 'Envio Jira', value: 11 },
+      { label: 'Recebido Jira', value: 12 },
+      { label: 'Reabertura Jira', value: 13 },
+    ] as readonly { label: string; value: number }[],
+
     /** Default numeric ID for "Prioridade" (Baixa = 1 in Freshdesk's priority enum) */
     DEFAULT_PRIORIDADE_ID: 1,
 

@@ -16,6 +16,7 @@
 
 import { FreshdeskAPI } from './api';
 import { ContextManager } from './context';
+import { CONSTANTS } from './constants';
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
 
@@ -326,27 +327,10 @@ export class LookupService {
       'waiting on third party': 'Aguardando Terceiro',
     };
 
-    /**
-     * Translates a field label from English to Portuguese using the
-     * EN_TO_PT_LABELS map. If no translation is found, returns the
-     * original label unchanged (this preserves any custom statuses
-     * that may already be in Portuguese or have no translation).
-     *
-     * @param label - The original label string from the API.
-     * @returns The Portuguese translation, or the original label.
-     */
     const translateLabel = (label: string): string => {
       return EN_TO_PT_LABELS[label.toLowerCase()] || label;
     };
 
-    /**
-     * Generic parser for standard Freshdesk field choices.
-     * Handles all known formats that the ticket_fields API returns,
-     * including the inverted key-value object format from V2.
-     *
-     * @param choices - The raw choices data from the API field definition.
-     * @returns Array of FieldChoice with label and numeric value.
-     */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const parseStandardChoices = (choices: any): FieldChoice[] => {
       const result: FieldChoice[] = [];
@@ -354,18 +338,15 @@ export class LookupService {
       if (Array.isArray(choices)) {
         for (const c of choices) {
           if (Array.isArray(c) && c.length >= 2) {
-            // Format C: [["Aberto", 2], ["Pendente", 3]]
             result.push({
               label: String(c[0]),
               value: typeof c[1] === 'number' ? c[1] : parseInt(String(c[1]), 10),
             });
           } else if (c && typeof c === 'object') {
-            // Format D: [{ value: "Aberto", id: 2 }] or [{ label: "Aberto", id: 2 }]
             const label = c.value || c.label || c.name || '';
             const id = c.id || c.choice_id || 0;
             if (label && id) result.push({ label: String(label), value: Number(id) });
           } else if (typeof c === 'string') {
-            // Format: ["Aberto", "Pendente"] — no IDs available
             result.push({ label: c, value: 0 });
           }
         }
@@ -375,13 +356,15 @@ export class LookupService {
           const valAsNumber = typeof val === 'number' ? val : parseInt(String(val), 10);
 
           if (!isNaN(keyAsNumber) && typeof val === 'string') {
-            // Format B (inverted): { "2": "Open", "3": "Pending" }
-            // Key is the numeric ID (as string), value is the label.
-            // This is the format returned by Freshdesk V2 for Status and Priority.
             result.push({ label: String(val), value: keyAsNumber });
+          } else if (!isNaN(keyAsNumber) && Array.isArray(val) && val.length >= 1) {
+            result.push({ label: String(val[0]), value: keyAsNumber });
+          } else if (!isNaN(keyAsNumber) && val && typeof val === 'object' && !Array.isArray(val)) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const obj = val as any;
+            const label = obj.name || obj.label || obj.value || obj.title || '';
+            if (label) result.push({ label: String(label), value: keyAsNumber });
           } else if (key && !isNaN(valAsNumber)) {
-            // Format A (standard): { "Aberto": 2, "Pendente": 3 }
-            // Key is the label, value is the numeric ID.
             result.push({ label: key, value: valAsNumber });
           }
         }
@@ -403,11 +386,27 @@ export class LookupService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const statusField = fieldsArray.find((f: any) => f.name === 'status' || f.label === 'Status');
     if (statusField && statusField.choices) {
+      // ─── Debug: log raw status field for troubleshooting ──────────────
+      // Custom statuses in Freshdesk can cause the API to return choices
+      // in non-standard formats. This log helps identify the exact format.
+      console.log('[Atlas Comet] Raw statusField structure:', JSON.stringify(statusField, null, 2));
+
       statusList = parseStandardChoices(statusField.choices).map((c) => ({
         ...c,
         label: translateLabel(c.label),
       }));
       console.log(`[Atlas Comet] Status: ${statusList.length} opções parseadas da API`, statusList);
+    } else {
+      console.warn('[Atlas Comet] Status field not found in API response. Searched for name="status" or label="Status".');
+    }
+
+    // ─── Fallback: use hardcoded status list if API parsing returned empty ───
+    // This is critical for Freshdesk instances with many custom statuses,
+    // where the API may return choices in a format the generic parser cannot handle.
+    if (statusList.length === 0) {
+      console.warn('[Atlas Comet] Status list is empty after API parsing. Applying hardcoded fallback.');
+      statusList = CONSTANTS.VALUES.FALLBACK_STATUSES.map((s) => ({ label: s.label, value: s.value }));
+      console.log(`[Atlas Comet] Status fallback aplicado: ${statusList.length} opções`, statusList);
     }
 
     // Parse Priority (Prioridade) field — apply EN→PT translation to labels
@@ -581,6 +580,12 @@ export class LookupService {
     priorityList = cachedPriorities || [];
     productList = cachedProducts || [];
     this.cachedLeaves = null;
+
+    // Apply fallback if cached statuses were empty (previous failed parse)
+    if (statusList.length === 0) {
+      console.warn('[Atlas Comet] Cached statuses empty. Applying hardcoded fallback.');
+      statusList = CONSTANTS.VALUES.FALLBACK_STATUSES.map((s) => ({ label: s.label, value: s.value }));
+    }
   }
 
   // ─── Public API ──────────────────────────────────────────────────────────────

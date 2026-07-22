@@ -168,6 +168,8 @@ export const CONSTANTS = {
     NEW_TICKET_PRODUTO: 'atlas_newticket_produto_pref',
     /** Saved "Contato" preference for the New Ticket modal (stores { id, name, email }) */
     NEW_TICKET_CONTATO: 'atlas_newticket_contato_pref',
+    /** Saved "Tag" preference for the New Ticket modal (stores { id, value }) */
+    NEW_TICKET_TAG: 'atlas_newticket_tag_pref',
     /** Saved service level filter preferences for the New Ticket modal */
     NEW_TICKET_LEVEL_PREFS: 'atlas_newticket_level_prefs',
   },

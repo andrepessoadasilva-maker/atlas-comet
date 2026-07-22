@@ -184,6 +184,50 @@ export class NewTicketUIFactory {
       'Preencha os campos abaixo. Os campos com ⭐ possuem memorização independente.';
     modalBody.appendChild(subtitle);
 
+    // ─── Inline Validation Helper ─────────────────────────────────────────
+    const showValidationError = (inputElement: HTMLElement, wrapperElement: HTMLElement, message: string) => {
+      // Create or update error banner
+      let banner = wrapperElement.querySelector('.atlas-validation-banner') as HTMLElement;
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.className = 'atlas-validation-banner';
+        banner.style.cssText = 'background-color: #e74c3c; color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 4px; margin-top: 4px; display: flex; align-items: center; gap: 6px; animation: atlas-comet-fade-in 0.2s ease-out;';
+        const iconSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+        banner.innerHTML = `${iconSvg} <span>${message}</span>`;
+        wrapperElement.appendChild(banner);
+      } else {
+        const span = banner.querySelector('span');
+        if (span) span.textContent = message;
+      }
+
+      // Add shake animation and red border
+      inputElement.animate([
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(-4px)' },
+        { transform: 'translateX(4px)' },
+        { transform: 'translateX(-4px)' },
+        { transform: 'translateX(4px)' },
+        { transform: 'translateX(0)' }
+      ], { duration: 400, easing: 'ease-in-out' });
+      
+      const originalBorder = inputElement.style.borderColor;
+      inputElement.style.setProperty('border-color', '#e74c3c', 'important');
+
+      // Clear error on next interaction
+      const clearError = () => {
+        if (banner && banner.parentNode) {
+          banner.parentNode.removeChild(banner);
+        }
+        inputElement.style.borderColor = originalBorder;
+        inputElement.removeEventListener('input', clearError);
+        inputElement.removeEventListener('change', clearError);
+        inputElement.removeEventListener('focus', clearError);
+      };
+      inputElement.addEventListener('input', clearError);
+      inputElement.addEventListener('change', clearError);
+      inputElement.addEventListener('focus', clearError);
+    };
+
     // ─── Scrollable form container ──────────────────────────────────────
     const formContainer = document.createElement('div');
     formContainer.style.cssText =
@@ -289,6 +333,10 @@ export class NewTicketUIFactory {
       });
       memoBtn.addEventListener('click', () => {
         if (!ContextManager.isValid()) return;
+        if (!select.value || select.value === '0' || select.value === 'null') {
+          showValidationError(select, wrapper, `Selecione uma opção válida para ${labelText}.`);
+          return;
+        }
         chrome.storage.local.set({ [storageKey]: select.value }, () => {
           memoBtn.dataset.saved = 'true';
           memoBtn.style.background = '#02ac85';
@@ -494,7 +542,7 @@ export class NewTicketUIFactory {
     contatoMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
       if (!selectedContact) {
-        alert('Selecione um contato antes de salvar.');
+        showValidationError(contatoInput, contatoWrapper, 'Selecione um contato antes de salvar.');
         return;
       }
       chrome.storage.local.set(
@@ -630,6 +678,10 @@ export class NewTicketUIFactory {
     });
     tipoMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
+      if (!tipoInput.value) {
+        showValidationError(tipoInput, tipoWrapper, 'Selecione um Tipo antes de salvar.');
+        return;
+      }
       chrome.storage.local.set({ [CONSTANTS.STORAGE.NEW_TICKET_TIPO]: tipoInput.value }, () => {
         tipoMemoBtn.dataset.saved = 'true';
         tipoMemoBtn.style.background = '#02ac85';
@@ -1125,6 +1177,10 @@ export class NewTicketUIFactory {
     });
     grupoMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
+      if (!grupoSelect.value || grupoSelect.value === '0' || grupoSelect.value === 'null') {
+        showValidationError(grupoSelect, grupoWrapper, 'Selecione um Grupo antes de salvar.');
+        return;
+      }
       const selectedOpt = grupoSelect.options[grupoSelect.selectedIndex];
       chrome.storage.local.set(
         { [CONSTANTS.STORAGE.NEW_TICKET_GRUPO]: { id: grupoSelect.value, name: selectedOpt?.textContent || '' } },
@@ -1150,6 +1206,10 @@ export class NewTicketUIFactory {
     });
     agenteMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
+      if (!agenteSelect.value || agenteSelect.value === '0' || agenteSelect.value === 'null') {
+        showValidationError(agenteSelect, agenteWrapper, 'Selecione um Agente antes de salvar.');
+        return;
+      }
       const selectedOpt = agenteSelect.options[agenteSelect.selectedIndex];
       chrome.storage.local.set(
         { [CONSTANTS.STORAGE.NEW_TICKET_AGENTE]: { id: agenteSelect.value, name: selectedOpt?.textContent || '' } },

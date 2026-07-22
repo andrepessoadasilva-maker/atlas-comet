@@ -566,7 +566,7 @@ export class NewTicketUIFactory {
       );
     });
 
-
+    formContainer.appendChild(contatoWrapper);
 
     // ═══════════════════════════════════════════════════════════════════════
     // FIELD 3: Tipo (with search dropdown, same pattern as ticket modal)

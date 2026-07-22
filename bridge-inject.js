@@ -250,7 +250,7 @@
         return;
       }
       
-      if (!parsedUrl.pathname.match(/^(\/api\/_\/tickets(\/\d+(\/update_properties)?)?|\/api\/(v2|_)\/ticket_fields|\/api\/(v2|_)\/contacts\/autocomplete|\/api\/_\/search\/autocomplete\/requesters|\/api\/_\/bootstrap\/agents_groups|\/api\/(v2|_)\/(groups|agents)(\/\d+)?)$/)) {
+      if (!parsedUrl.pathname.match(/^(\/api\/_\/tickets(\/\d+(\/update_properties)?)?|\/api\/(v2|_)\/ticket_fields|\/api\/(v2|_)\/contacts\/autocomplete|\/api\/_\/search\/autocomplete\/(requesters|tags)|\/api\/_\/bootstrap\/agents_groups|\/api\/(v2|_)\/(groups|agents)(\/\d+)?)$/)) {
         console.error('[Atlas Comet Bridge] ❌ Unauthorized API endpoint requested:', url);
         return;
       }

@@ -566,145 +566,7 @@ export class NewTicketUIFactory {
       );
     });
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // FIELD 2.5: Tags (search with autocomplete)
-    // ═══════════════════════════════════════════════════════════════════════
-    const tagWrapper = document.createElement('div');
-    tagWrapper.style.cssText = selectWrapperStyle;
 
-    const tagLabelRow = document.createElement('div');
-    tagLabelRow.style.cssText = 'display: flex; align-items: center; margin-bottom: 6px;';
-
-    const tagLabel = document.createElement('label');
-    tagLabel.style.cssText = labelStyle;
-    tagLabel.textContent = '⭐ Tags';
-
-    const tagMemoBtn = document.createElement('button');
-    tagMemoBtn.type = 'button';
-    tagMemoBtn.style.cssText = memoBtnBaseStyle;
-    tagMemoBtn.innerHTML = bookmarkSvg;
-    tagMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-
-    tagLabelRow.appendChild(tagLabel);
-    tagLabelRow.appendChild(tagMemoBtn);
-    tagWrapper.appendChild(tagLabelRow);
-
-    const tagInput = document.createElement('input');
-    tagInput.type = 'text';
-    tagInput.placeholder = 'Buscar tags cadastradas...';
-    tagInput.style.cssText = inputStyle;
-
-    const tagResultsContainer = document.createElement('ul');
-    tagResultsContainer.style.cssText = `
-      list-style: none; padding: 0; margin: 4px 0 0 0; position: absolute;
-      top: calc(100%); left: 0; width: 100%; background: white; z-index: 1001;
-      overflow-y: auto; max-height: 200px; border: 1px solid #ddd; border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none;
-    `;
-
-    /** Stores the selected tag data { id, value } */
-    let selectedTag: { id: number; value: string } | null = null;
-    let tagSearchTimeout: ReturnType<typeof setTimeout> | null = null;
-
-    tagInput.addEventListener('focus', () => {
-      tagInput.style.borderColor = '#02ac85';
-      tagInput.style.boxShadow = '0 0 0 3px rgba(172, 254, 223, 0.2)';
-    });
-    tagInput.addEventListener('blur', () => {
-      tagInput.style.borderColor = '#ddd';
-      tagInput.style.boxShadow = 'none';
-      setTimeout(() => { tagResultsContainer.style.display = 'none'; }, 200);
-    });
-    tagInput.addEventListener('input', () => {
-      selectedTag = null;
-      const query = tagInput.value.trim();
-      if (query.length < 2) {
-        tagResultsContainer.style.display = 'none';
-        return;
-      }
-
-      if (tagSearchTimeout) clearTimeout(tagSearchTimeout);
-      tagSearchTimeout = setTimeout(async () => {
-        try {
-          const url = '/api/_/search/autocomplete/tags';
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const response = (await FreshdeskAPI.sendBridgeRequest(url, 'POST', { term: query })) as any;
-          
-          let tags = [];
-          if (response && response.tags && Array.isArray(response.tags)) {
-            tags = response.tags;
-          } else if (Array.isArray(response)) {
-            tags = response;
-          }
-
-          while (tagResultsContainer.firstChild) tagResultsContainer.removeChild(tagResultsContainer.firstChild);
-
-          if (tags.length === 0) {
-            const emptyItem = document.createElement('li');
-            emptyItem.style.cssText = 'padding: 8px 12px; text-align: center; color: #999; font-size: 13px;';
-            emptyItem.textContent = 'Nenhuma tag encontrada.';
-            tagResultsContainer.appendChild(emptyItem);
-          } else {
-            for (const tag of tags.slice(0, 10)) {
-              const li = document.createElement('li');
-              li.style.cssText = `
-                padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
-                font-size: 13px; color: #333; transition: background 0.15s ease;
-              `;
-              
-              const tagSpan = document.createElement('span');
-              tagSpan.style.cssText = 'font-weight: 600; display: inline-block; background: #eef2f6; padding: 2px 6px; border-radius: 4px; border: 1px solid #dae1e8;';
-              tagSpan.textContent = tag.value || 'Sem Nome';
-              li.appendChild(tagSpan);
-
-              li.addEventListener('mouseenter', () => { li.style.background = '#f0f7ff'; });
-              li.addEventListener('mouseleave', () => { li.style.background = 'transparent'; });
-              li.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                selectedTag = { id: tag.id, value: tag.value };
-                tagInput.value = selectedTag.value;
-                tagResultsContainer.style.display = 'none';
-              });
-              tagResultsContainer.appendChild(li);
-            }
-          }
-          tagResultsContainer.style.display = 'block';
-        } catch (e) {
-          console.error('[Atlas Comet] Erro ao buscar tags:', e);
-        }
-      }, 300);
-    });
-
-    tagWrapper.appendChild(tagInput);
-    tagWrapper.appendChild(tagResultsContainer);
-
-    tagMemoBtn.addEventListener('mouseenter', () => {
-      if (!tagMemoBtn.dataset.saved) { tagMemoBtn.style.borderColor = '#02ac85'; tagMemoBtn.style.color = '#02ac85'; }
-    });
-    tagMemoBtn.addEventListener('mouseleave', () => {
-      if (!tagMemoBtn.dataset.saved) { tagMemoBtn.style.borderColor = '#ccc'; tagMemoBtn.style.color = '#777'; }
-    });
-    tagMemoBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      if (!selectedTag) {
-        showValidationError(tagInput, tagWrapper, 'Selecione uma tag antes de salvar.');
-        return;
-      }
-      chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_TAG]: selectedTag },
-        () => {
-          tagMemoBtn.dataset.saved = 'true';
-          tagMemoBtn.style.background = '#02ac85'; tagMemoBtn.style.borderColor = '#02ac85'; tagMemoBtn.style.color = '#ffffff';
-          tagMemoBtn.innerHTML = checkSvg; tagMemoBtn.appendChild(document.createTextNode(' Salvo'));
-          setTimeout(() => {
-            delete tagMemoBtn.dataset.saved;
-            tagMemoBtn.style.background = 'transparent'; tagMemoBtn.style.borderColor = '#ccc'; tagMemoBtn.style.color = '#777';
-            tagMemoBtn.innerHTML = bookmarkSvg; tagMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-          }, 2000);
-        },
-      );
-    });
-    formContainer.appendChild(tagWrapper);
 
     // ═══════════════════════════════════════════════════════════════════════
     // FIELD 3: Tipo (with search dropdown, same pattern as ticket modal)
@@ -1377,6 +1239,146 @@ export class NewTicketUIFactory {
       CONSTANTS.STORAGE.NEW_TICKET_PRODUTO,
     );
     formContainer.appendChild(produtoField.wrapper);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // FIELD 9.5: Tags (search with autocomplete)
+    // ═══════════════════════════════════════════════════════════════════════
+    const tagWrapper = document.createElement('div');
+    tagWrapper.style.cssText = selectWrapperStyle;
+
+    const tagLabelRow = document.createElement('div');
+    tagLabelRow.style.cssText = 'display: flex; align-items: center; margin-bottom: 6px;';
+
+    const tagLabel = document.createElement('label');
+    tagLabel.style.cssText = labelStyle;
+    tagLabel.textContent = '⭐ Tags';
+
+    const tagMemoBtn = document.createElement('button');
+    tagMemoBtn.type = 'button';
+    tagMemoBtn.style.cssText = memoBtnBaseStyle;
+    tagMemoBtn.innerHTML = bookmarkSvg;
+    tagMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+
+    tagLabelRow.appendChild(tagLabel);
+    tagLabelRow.appendChild(tagMemoBtn);
+    tagWrapper.appendChild(tagLabelRow);
+
+    const tagInput = document.createElement('input');
+    tagInput.type = 'text';
+    tagInput.placeholder = 'Buscar tags cadastradas...';
+    tagInput.style.cssText = inputStyle;
+
+    const tagResultsContainer = document.createElement('ul');
+    tagResultsContainer.style.cssText = `
+      list-style: none; padding: 0; margin: 4px 0 0 0; position: absolute;
+      top: calc(100%); left: 0; width: 100%; background: white; z-index: 1001;
+      overflow-y: auto; max-height: 200px; border: 1px solid #ddd; border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none;
+    `;
+
+    /** Stores the selected tag data { id, value } */
+    let selectedTag: { id: number; value: string } | null = null;
+    let tagSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    tagInput.addEventListener('focus', () => {
+      tagInput.style.borderColor = '#02ac85';
+      tagInput.style.boxShadow = '0 0 0 3px rgba(172, 254, 223, 0.2)';
+    });
+    tagInput.addEventListener('blur', () => {
+      tagInput.style.borderColor = '#ddd';
+      tagInput.style.boxShadow = 'none';
+      setTimeout(() => { tagResultsContainer.style.display = 'none'; }, 200);
+    });
+    tagInput.addEventListener('input', () => {
+      selectedTag = null;
+      const query = tagInput.value.trim();
+      if (query.length < 2) {
+        tagResultsContainer.style.display = 'none';
+        return;
+      }
+
+      if (tagSearchTimeout) clearTimeout(tagSearchTimeout);
+      tagSearchTimeout = setTimeout(async () => {
+        try {
+          const url = '/api/_/search/autocomplete/tags';
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const response = (await FreshdeskAPI.sendBridgeRequest(url, 'POST', { term: query })) as any;
+          
+          let tags = [];
+          if (response && response.tags && Array.isArray(response.tags)) {
+            tags = response.tags;
+          } else if (Array.isArray(response)) {
+            tags = response;
+          }
+
+          while (tagResultsContainer.firstChild) tagResultsContainer.removeChild(tagResultsContainer.firstChild);
+
+          if (tags.length === 0) {
+            const emptyItem = document.createElement('li');
+            emptyItem.style.cssText = 'padding: 8px 12px; text-align: center; color: #999; font-size: 13px;';
+            emptyItem.textContent = 'Nenhuma tag encontrada.';
+            tagResultsContainer.appendChild(emptyItem);
+          } else {
+            for (const tag of tags.slice(0, 10)) {
+              const li = document.createElement('li');
+              li.style.cssText = `
+                padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0;
+                font-size: 13px; color: #333; transition: background 0.15s ease;
+              `;
+              
+              const tagSpan = document.createElement('span');
+              tagSpan.style.cssText = 'font-weight: 600; display: inline-block; background: #eef2f6; padding: 2px 6px; border-radius: 4px; border: 1px solid #dae1e8;';
+              tagSpan.textContent = tag.value || 'Sem Nome';
+              li.appendChild(tagSpan);
+
+              li.addEventListener('mouseenter', () => { li.style.background = '#f0f7ff'; });
+              li.addEventListener('mouseleave', () => { li.style.background = 'transparent'; });
+              li.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                selectedTag = { id: tag.id, value: tag.value };
+                tagInput.value = selectedTag.value;
+                tagResultsContainer.style.display = 'none';
+              });
+              tagResultsContainer.appendChild(li);
+            }
+          }
+          tagResultsContainer.style.display = 'block';
+        } catch (e) {
+          console.error('[Atlas Comet] Erro ao buscar tags:', e);
+        }
+      }, 300);
+    });
+
+    tagWrapper.appendChild(tagInput);
+    tagWrapper.appendChild(tagResultsContainer);
+
+    tagMemoBtn.addEventListener('mouseenter', () => {
+      if (!tagMemoBtn.dataset.saved) { tagMemoBtn.style.borderColor = '#02ac85'; tagMemoBtn.style.color = '#02ac85'; }
+    });
+    tagMemoBtn.addEventListener('mouseleave', () => {
+      if (!tagMemoBtn.dataset.saved) { tagMemoBtn.style.borderColor = '#ccc'; tagMemoBtn.style.color = '#777'; }
+    });
+    tagMemoBtn.addEventListener('click', () => {
+      if (!ContextManager.isValid()) return;
+      if (!selectedTag) {
+        showValidationError(tagInput, tagWrapper, 'Selecione uma tag antes de salvar.');
+        return;
+      }
+      chrome.storage.local.set(
+        { [CONSTANTS.STORAGE.NEW_TICKET_TAG]: selectedTag },
+        () => {
+          tagMemoBtn.dataset.saved = 'true';
+          tagMemoBtn.style.background = '#02ac85'; tagMemoBtn.style.borderColor = '#02ac85'; tagMemoBtn.style.color = '#ffffff';
+          tagMemoBtn.innerHTML = checkSvg; tagMemoBtn.appendChild(document.createTextNode(' Salvo'));
+          setTimeout(() => {
+            delete tagMemoBtn.dataset.saved;
+            tagMemoBtn.style.background = 'transparent'; tagMemoBtn.style.borderColor = '#ccc'; tagMemoBtn.style.color = '#777';
+            tagMemoBtn.innerHTML = bookmarkSvg; tagMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+          }, 2000);
+        },
+      );
+    });
+    formContainer.appendChild(tagWrapper);
 
     // ═══════════════════════════════════════════════════════════════════════
     // FIELD 10: Assunto (text input)

@@ -102,12 +102,6 @@ export class NewTicketUIFactory {
         console.log('[Atlas Comet] Injetando botão com appendChild no headerContainer.', headerContainer.className);
         headerContainer.appendChild(container);
       }
-    } else {
-      console.log('[Atlas Comet] Header não encontrado. Usando botão flutuante.');
-      // Floating mode — top-right of the page
-      container.style.cssText =
-        'position: fixed; top: 12px; right: 220px; display: inline-flex; align-items: center; gap: 6px; z-index: 99990; height: 32px;';
-      document.body.appendChild(container);
     }
   }
 
@@ -178,11 +172,7 @@ export class NewTicketUIFactory {
     title.appendChild(document.createTextNode('Novo Ticket — Definir Serviço'));
     modalBody.appendChild(title);
 
-    const subtitle = document.createElement('p');
-    subtitle.style.cssText = 'color: #29735c; font-size: 13px; margin: 0 0 16px 0;';
-    subtitle.textContent =
-      'Preencha os campos abaixo. Os campos com ⭐ possuem memorização independente.';
-    modalBody.appendChild(subtitle);
+
 
     // ─── Inline Validation Helper ─────────────────────────────────────────
     const showValidationError = (inputElement: HTMLElement, wrapperElement: HTMLElement, message: string) => {
@@ -283,27 +273,25 @@ export class NewTicketUIFactory {
 
       const label = document.createElement('label');
       label.style.cssText = labelStyle;
-      label.textContent = `⭐ ${labelText}`;
-
-      const memoBtn = document.createElement('button');
-      memoBtn.type = 'button';
-      memoBtn.style.cssText = memoBtnBaseStyle;
-      memoBtn.innerHTML = bookmarkSvg;
-      memoBtn.appendChild(document.createTextNode(' Lembrar'));
+      label.textContent = labelText;
 
       labelRow.appendChild(label);
-      labelRow.appendChild(memoBtn);
       wrapper.appendChild(labelRow);
 
       // Select element — each option's value is the numeric API ID
       const select = document.createElement('select');
       select.style.cssText = inputStyle + ' cursor: pointer;';
 
+      const emptyOption = document.createElement('option');
+      emptyOption.value = '';
+      emptyOption.textContent = 'Selecione...';
+      select.appendChild(emptyOption);
+
       for (const choice of choices) {
         const option = document.createElement('option');
         option.value = String(choice.value);    // Numeric ID as string
         option.textContent = choice.label;      // Human-readable label
-        if (choice.value === defaultId) option.selected = true;
+        // if (choice.value === defaultId) option.selected = true; // Removed to force empty by default
         select.appendChild(option);
       }
 
@@ -318,38 +306,7 @@ export class NewTicketUIFactory {
 
       wrapper.appendChild(select);
 
-      // Memo button click handler
-      memoBtn.addEventListener('mouseenter', () => {
-        if (!memoBtn.dataset.saved) {
-          memoBtn.style.borderColor = '#02ac85';
-          memoBtn.style.color = '#02ac85';
-        }
-      });
-      memoBtn.addEventListener('mouseleave', () => {
-        if (!memoBtn.dataset.saved) {
-          memoBtn.style.borderColor = '#ccc';
-          memoBtn.style.color = '#777';
-        }
-      });
-      memoBtn.addEventListener('click', () => {
-        if (!ContextManager.isValid()) return;
-        chrome.storage.local.set({ [storageKey]: select.value || null }, () => {
-          memoBtn.dataset.saved = 'true';
-          memoBtn.style.background = '#02ac85';
-          memoBtn.style.borderColor = '#02ac85';
-          memoBtn.style.color = '#ffffff';
-          memoBtn.innerHTML = checkSvg;
-          memoBtn.appendChild(document.createTextNode(' Salvo'));
-          setTimeout(() => {
-            delete memoBtn.dataset.saved;
-            memoBtn.style.background = 'transparent';
-            memoBtn.style.borderColor = '#ccc';
-            memoBtn.style.color = '#777';
-            memoBtn.innerHTML = bookmarkSvg;
-            memoBtn.appendChild(document.createTextNode(' Lembrar'));
-          }, 2000);
-        });
-      });
+
 
       return { wrapper, select };
     };
@@ -389,16 +346,9 @@ export class NewTicketUIFactory {
 
     const contatoLabel = document.createElement('label');
     contatoLabel.style.cssText = labelStyle;
-    contatoLabel.textContent = '⭐ Contato';
-
-    const contatoMemoBtn = document.createElement('button');
-    contatoMemoBtn.type = 'button';
-    contatoMemoBtn.style.cssText = memoBtnBaseStyle;
-    contatoMemoBtn.innerHTML = bookmarkSvg;
-    contatoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+    contatoLabel.textContent = 'Contato';
 
     contatoLabelRow.appendChild(contatoLabel);
-    contatoLabelRow.appendChild(contatoMemoBtn);
     contatoWrapper.appendChild(contatoLabelRow);
 
     const contatoInput = document.createElement('input');
@@ -522,41 +472,7 @@ export class NewTicketUIFactory {
     contatoWrapper.appendChild(contatoInput);
     contatoWrapper.appendChild(contatoResultsContainer);
 
-    // Contato memo button event handlers
-    contatoMemoBtn.addEventListener('mouseenter', () => {
-      if (!contatoMemoBtn.dataset.saved) {
-        contatoMemoBtn.style.borderColor = '#02ac85';
-        contatoMemoBtn.style.color = '#02ac85';
-      }
-    });
-    contatoMemoBtn.addEventListener('mouseleave', () => {
-      if (!contatoMemoBtn.dataset.saved) {
-        contatoMemoBtn.style.borderColor = '#ccc';
-        contatoMemoBtn.style.color = '#777';
-      }
-    });
-    contatoMemoBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_CONTATO]: selectedContact || null },
-        () => {
-          contatoMemoBtn.dataset.saved = 'true';
-          contatoMemoBtn.style.background = '#02ac85';
-          contatoMemoBtn.style.borderColor = '#02ac85';
-          contatoMemoBtn.style.color = '#ffffff';
-          contatoMemoBtn.innerHTML = checkSvg;
-          contatoMemoBtn.appendChild(document.createTextNode(' Salvo'));
-          setTimeout(() => {
-            delete contatoMemoBtn.dataset.saved;
-            contatoMemoBtn.style.background = 'transparent';
-            contatoMemoBtn.style.borderColor = '#ccc';
-            contatoMemoBtn.style.color = '#777';
-            contatoMemoBtn.innerHTML = bookmarkSvg;
-            contatoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-          }, 2000);
-        },
-      );
-    });
+
 
     formContainer.appendChild(contatoWrapper);
 
@@ -571,22 +487,15 @@ export class NewTicketUIFactory {
 
     const tipoLabel = document.createElement('label');
     tipoLabel.style.cssText = labelStyle;
-    tipoLabel.textContent = '⭐ Tipo do Ticket';
-
-    const tipoMemoBtn = document.createElement('button');
-    tipoMemoBtn.type = 'button';
-    tipoMemoBtn.style.cssText = memoBtnBaseStyle;
-    tipoMemoBtn.innerHTML = bookmarkSvg;
-    tipoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+    tipoLabel.textContent = 'Tipo do Ticket';
 
     tipoLabelRow.appendChild(tipoLabel);
-    tipoLabelRow.appendChild(tipoMemoBtn);
     tipoWrapper.appendChild(tipoLabelRow);
 
     const tipoInput = document.createElement('input');
     tipoInput.type = 'text';
     tipoInput.placeholder = 'Digite para buscar o tipo...';
-    tipoInput.value = CONSTANTS.VALUES.DEFAULT_TICKET_TYPE;
+    tipoInput.value = '';
     tipoInput.style.cssText = inputStyle;
 
     const tipoResultsContainer = document.createElement('ul');
@@ -656,37 +565,7 @@ export class NewTicketUIFactory {
     });
 
     // Tipo memo button
-    tipoMemoBtn.addEventListener('mouseenter', () => {
-      if (!tipoMemoBtn.dataset.saved) {
-        tipoMemoBtn.style.borderColor = '#02ac85';
-        tipoMemoBtn.style.color = '#02ac85';
-      }
-    });
-    tipoMemoBtn.addEventListener('mouseleave', () => {
-      if (!tipoMemoBtn.dataset.saved) {
-        tipoMemoBtn.style.borderColor = '#ccc';
-        tipoMemoBtn.style.color = '#777';
-      }
-    });
-    tipoMemoBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      chrome.storage.local.set({ [CONSTANTS.STORAGE.NEW_TICKET_TIPO]: tipoInput.value.trim() || null }, () => {
-        tipoMemoBtn.dataset.saved = 'true';
-        tipoMemoBtn.style.background = '#02ac85';
-        tipoMemoBtn.style.borderColor = '#02ac85';
-        tipoMemoBtn.style.color = '#ffffff';
-        tipoMemoBtn.innerHTML = checkSvg;
-        tipoMemoBtn.appendChild(document.createTextNode(' Salvo'));
-        setTimeout(() => {
-          delete tipoMemoBtn.dataset.saved;
-          tipoMemoBtn.style.background = 'transparent';
-          tipoMemoBtn.style.borderColor = '#ccc';
-          tipoMemoBtn.style.color = '#777';
-          tipoMemoBtn.innerHTML = bookmarkSvg;
-          tipoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-        }, 2000);
-      });
-    });
+
 
     tipoWrapper.appendChild(tipoInput);
     tipoWrapper.appendChild(tipoResultsContainer);
@@ -703,16 +582,9 @@ export class NewTicketUIFactory {
 
     const servicoLabel = document.createElement('label');
     servicoLabel.style.cssText = labelStyle;
-    servicoLabel.textContent = '⭐ Buscar Serviço (Nível 2 ou 3)';
-
-    const servicoMemoBtn = document.createElement('button');
-    servicoMemoBtn.type = 'button';
-    servicoMemoBtn.style.cssText = memoBtnBaseStyle;
-    servicoMemoBtn.innerHTML = bookmarkSvg;
-    servicoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+    servicoLabel.textContent = 'Buscar Serviço (Nível 2 ou 3)';
 
     servicoLabelRow.appendChild(servicoLabel);
-    servicoLabelRow.appendChild(servicoMemoBtn);
     servicoContainer.appendChild(servicoLabelRow);
 
     const searchWrapper = document.createElement('div');
@@ -799,7 +671,6 @@ export class NewTicketUIFactory {
 
     filterRow.appendChild(cbN2Label);
     filterRow.appendChild(cbN3Label);
-    filterRow.appendChild(prefsBtn);
     servicoContainer.appendChild(filterRow);
 
     // Service results container
@@ -949,31 +820,7 @@ export class NewTicketUIFactory {
     servicoContainer.appendChild(resultsContainer);
     servicoContainer.appendChild(selectedServiceBadge);
 
-    servicoMemoBtn.addEventListener('mouseenter', () => {
-      if (!servicoMemoBtn.dataset.saved) { servicoMemoBtn.style.borderColor = '#02ac85'; servicoMemoBtn.style.color = '#02ac85'; }
-    });
-    servicoMemoBtn.addEventListener('mouseleave', () => {
-      if (!servicoMemoBtn.dataset.saved) { servicoMemoBtn.style.borderColor = '#ccc'; servicoMemoBtn.style.color = '#777'; }
-    });
-    servicoMemoBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      chrome.storage.local.set(
-        { 
-          [CONSTANTS.STORAGE.NEW_TICKET_SERVICO]: selectedService || null,
-          [CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS]: { n3: cbN3.checked, n2: cbN2.checked }
-        },
-        () => {
-          servicoMemoBtn.dataset.saved = 'true';
-          servicoMemoBtn.style.background = '#02ac85'; servicoMemoBtn.style.borderColor = '#02ac85'; servicoMemoBtn.style.color = '#ffffff';
-          servicoMemoBtn.innerHTML = checkSvg; servicoMemoBtn.appendChild(document.createTextNode(' Salvo'));
-          setTimeout(() => {
-            delete servicoMemoBtn.dataset.saved;
-            servicoMemoBtn.style.background = 'transparent'; servicoMemoBtn.style.borderColor = '#ccc'; servicoMemoBtn.style.color = '#777';
-            servicoMemoBtn.innerHTML = bookmarkSvg; servicoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-          }, 2000);
-        },
-      );
-    });
+
 
     formContainer.appendChild(servicoContainer);
 
@@ -1010,16 +857,9 @@ export class NewTicketUIFactory {
 
     const grupoLabel = document.createElement('label');
     grupoLabel.style.cssText = labelStyle;
-    grupoLabel.textContent = '⭐ Grupo';
-
-    const grupoMemoBtn = document.createElement('button');
-    grupoMemoBtn.type = 'button';
-    grupoMemoBtn.style.cssText = memoBtnBaseStyle;
-    grupoMemoBtn.innerHTML = bookmarkSvg;
-    grupoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+    grupoLabel.textContent = 'Grupo';
 
     grupoLabelRow.appendChild(grupoLabel);
-    grupoLabelRow.appendChild(grupoMemoBtn);
     grupoWrapper.appendChild(grupoLabelRow);
 
     const grupoSelect = document.createElement('select');
@@ -1052,16 +892,9 @@ export class NewTicketUIFactory {
 
     const agenteLabel = document.createElement('label');
     agenteLabel.style.cssText = labelStyle;
-    agenteLabel.textContent = '⭐ Agente';
-
-    const agenteMemoBtn = document.createElement('button');
-    agenteMemoBtn.type = 'button';
-    agenteMemoBtn.style.cssText = memoBtnBaseStyle;
-    agenteMemoBtn.innerHTML = bookmarkSvg;
-    agenteMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+    agenteLabel.textContent = 'Agente';
 
     agenteLabelRow.appendChild(agenteLabel);
-    agenteLabelRow.appendChild(agenteMemoBtn);
     agenteWrapper.appendChild(agenteLabelRow);
 
     const agenteSelect = document.createElement('select');
@@ -1223,55 +1056,7 @@ export class NewTicketUIFactory {
       }
     });
 
-    // Grupo memo button
-    grupoMemoBtn.addEventListener('mouseenter', () => {
-      if (!grupoMemoBtn.dataset.saved) { grupoMemoBtn.style.borderColor = '#02ac85'; grupoMemoBtn.style.color = '#02ac85'; }
-    });
-    grupoMemoBtn.addEventListener('mouseleave', () => {
-      if (!grupoMemoBtn.dataset.saved) { grupoMemoBtn.style.borderColor = '#ccc'; grupoMemoBtn.style.color = '#777'; }
-    });
-    grupoMemoBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      const selectedOpt = grupoSelect.options[grupoSelect.selectedIndex];
-      chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_GRUPO]: { id: grupoSelect.value || null, name: selectedOpt?.textContent || '' } },
-        () => {
-          grupoMemoBtn.dataset.saved = 'true';
-          grupoMemoBtn.style.background = '#02ac85'; grupoMemoBtn.style.borderColor = '#02ac85'; grupoMemoBtn.style.color = '#ffffff';
-          grupoMemoBtn.innerHTML = checkSvg; grupoMemoBtn.appendChild(document.createTextNode(' Salvo'));
-          setTimeout(() => {
-            delete grupoMemoBtn.dataset.saved;
-            grupoMemoBtn.style.background = 'transparent'; grupoMemoBtn.style.borderColor = '#ccc'; grupoMemoBtn.style.color = '#777';
-            grupoMemoBtn.innerHTML = bookmarkSvg; grupoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-          }, 2000);
-        },
-      );
-    });
 
-    // Agente memo button
-    agenteMemoBtn.addEventListener('mouseenter', () => {
-      if (!agenteMemoBtn.dataset.saved) { agenteMemoBtn.style.borderColor = '#02ac85'; agenteMemoBtn.style.color = '#02ac85'; }
-    });
-    agenteMemoBtn.addEventListener('mouseleave', () => {
-      if (!agenteMemoBtn.dataset.saved) { agenteMemoBtn.style.borderColor = '#ccc'; agenteMemoBtn.style.color = '#777'; }
-    });
-    agenteMemoBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      const selectedOpt = agenteSelect.options[agenteSelect.selectedIndex];
-      chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_AGENTE]: { id: agenteSelect.value || null, name: selectedOpt?.textContent || '' } },
-        () => {
-          agenteMemoBtn.dataset.saved = 'true';
-          agenteMemoBtn.style.background = '#02ac85'; agenteMemoBtn.style.borderColor = '#02ac85'; agenteMemoBtn.style.color = '#ffffff';
-          agenteMemoBtn.innerHTML = checkSvg; agenteMemoBtn.appendChild(document.createTextNode(' Salvo'));
-          setTimeout(() => {
-            delete agenteMemoBtn.dataset.saved;
-            agenteMemoBtn.style.background = 'transparent'; agenteMemoBtn.style.borderColor = '#ccc'; agenteMemoBtn.style.color = '#777';
-            agenteMemoBtn.innerHTML = bookmarkSvg; agenteMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-          }, 2000);
-        },
-      );
-    });
 
     // ═══════════════════════════════════════════════════════════════════════
     // FIELD 9: Produto (dynamic from API)
@@ -1298,16 +1083,9 @@ export class NewTicketUIFactory {
 
     const tagLabel = document.createElement('label');
     tagLabel.style.cssText = labelStyle;
-    tagLabel.textContent = '⭐ Tags';
-
-    const tagMemoBtn = document.createElement('button');
-    tagMemoBtn.type = 'button';
-    tagMemoBtn.style.cssText = memoBtnBaseStyle;
-    tagMemoBtn.innerHTML = bookmarkSvg;
-    tagMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+    tagLabel.textContent = 'Tags';
 
     tagLabelRow.appendChild(tagLabel);
-    tagLabelRow.appendChild(tagMemoBtn);
     tagWrapper.appendChild(tagLabelRow);
 
     const tagInput = document.createElement('input');
@@ -1399,28 +1177,7 @@ export class NewTicketUIFactory {
     tagWrapper.appendChild(tagInput);
     tagWrapper.appendChild(tagResultsContainer);
 
-    tagMemoBtn.addEventListener('mouseenter', () => {
-      if (!tagMemoBtn.dataset.saved) { tagMemoBtn.style.borderColor = '#02ac85'; tagMemoBtn.style.color = '#02ac85'; }
-    });
-    tagMemoBtn.addEventListener('mouseleave', () => {
-      if (!tagMemoBtn.dataset.saved) { tagMemoBtn.style.borderColor = '#ccc'; tagMemoBtn.style.color = '#777'; }
-    });
-    tagMemoBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_TAG]: selectedTag || null },
-        () => {
-          tagMemoBtn.dataset.saved = 'true';
-          tagMemoBtn.style.background = '#02ac85'; tagMemoBtn.style.borderColor = '#02ac85'; tagMemoBtn.style.color = '#ffffff';
-          tagMemoBtn.innerHTML = checkSvg; tagMemoBtn.appendChild(document.createTextNode(' Salvo'));
-          setTimeout(() => {
-            delete tagMemoBtn.dataset.saved;
-            tagMemoBtn.style.background = 'transparent'; tagMemoBtn.style.borderColor = '#ccc'; tagMemoBtn.style.color = '#777';
-            tagMemoBtn.innerHTML = bookmarkSvg; tagMemoBtn.appendChild(document.createTextNode(' Lembrar'));
-          }, 2000);
-        },
-      );
-    });
+
     formContainer.appendChild(tagWrapper);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1522,6 +1279,26 @@ export class NewTicketUIFactory {
         showValidationError(descTextarea, descWrapper, 'Por favor, preencha a descrição.');
         return;
       }
+      if (!origemField.select.value) {
+        showValidationError(origemField.select, origemField.wrapper, 'Por favor, selecione a origem.');
+        return;
+      }
+      if (!tipoInput.value.trim()) {
+        showValidationError(tipoInput, tipoWrapper, 'Por favor, preencha o tipo do ticket.');
+        return;
+      }
+      if (!statusField.select.value) {
+        showValidationError(statusField.select, statusField.wrapper, 'Por favor, selecione o status.');
+        return;
+      }
+      if (!prioridadeField.select.value) {
+        showValidationError(prioridadeField.select, prioridadeField.wrapper, 'Por favor, selecione a prioridade.');
+        return;
+      }
+      if (!produtoField.select.value) {
+        showValidationError(produtoField.select, produtoField.wrapper, 'Por favor, selecione o produto.');
+        return;
+      }
 
       // Show loading state
       btnCreate.textContent = 'Criando...';
@@ -1550,40 +1327,94 @@ export class NewTicketUIFactory {
         btnCreate.style.opacity = '1';
       }
     };
-    const btnLimpar = document.createElement('button');
-    btnLimpar.type = 'button';
-    btnLimpar.style.cssText =
-      'padding: 10px 20px; background: transparent; color: #888; border: 1px solid #ccc; cursor: pointer; border-radius: 6px; font-weight: bold; transition: all 0.2s ease; margin-right: auto;';
-    btnLimpar.textContent = 'Limpar Formulário';
-    btnLimpar.addEventListener('mouseenter', () => { btnLimpar.style.background = '#f5f5f5'; });
-    btnLimpar.addEventListener('mouseleave', () => { btnLimpar.style.background = 'transparent'; });
-    btnLimpar.onclick = () => {
-      contatoInput.value = '';
-      selectedContact = null;
-      contatoResultsContainer.style.display = 'none';
+    const btnClearPrefs = document.createElement('button');
+    btnClearPrefs.type = 'button';
+    btnClearPrefs.style.cssText = 'padding: 10px 20px; background: transparent; color: #d9534f; border: 1px solid #d9534f; cursor: pointer; border-radius: 6px; font-weight: bold; transition: all 0.2s ease; margin-right: auto;';
+    btnClearPrefs.textContent = 'Limpar preferências';
+    btnClearPrefs.addEventListener('mouseenter', () => { btnClearPrefs.style.background = '#f9ebea'; });
+    btnClearPrefs.addEventListener('mouseleave', () => { btnClearPrefs.style.background = 'transparent'; });
+    btnClearPrefs.onclick = () => {
+      chrome.storage.local.remove([
+        CONSTANTS.STORAGE.NEW_TICKET_ORIGEM,
+        CONSTANTS.STORAGE.NEW_TICKET_CONTATO,
+        CONSTANTS.STORAGE.NEW_TICKET_TAG,
+        CONSTANTS.STORAGE.NEW_TICKET_SERVICO,
+        CONSTANTS.STORAGE.NEW_TICKET_TIPO,
+        CONSTANTS.STORAGE.NEW_TICKET_STATUS,
+        CONSTANTS.STORAGE.NEW_TICKET_PRIORIDADE,
+        CONSTANTS.STORAGE.NEW_TICKET_GRUPO,
+        CONSTANTS.STORAGE.NEW_TICKET_AGENTE,
+        CONSTANTS.STORAGE.NEW_TICKET_PRODUTO,
+        CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS
+      ], () => {
+        contatoInput.value = '';
+        selectedContact = null;
+        contatoResultsContainer.style.display = 'none';
 
-      searchInput.value = '';
-      selectedService = null;
-      selectedServiceBadge.style.display = 'none';
-      while (resultsContainer.firstChild) resultsContainer.removeChild(resultsContainer.firstChild);
+        searchInput.value = '';
+        selectedService = null;
+        selectedServiceBadge.style.display = 'none';
+        cbN2.checked = false;
+        cbN3.checked = false;
+        runSearch();
 
-      tagInput.value = '';
-      selectedTag = null;
-      tagResultsContainer.style.display = 'none';
+        tagInput.value = '';
+        selectedTag = null;
+        tagResultsContainer.style.display = 'none';
 
-      assuntoInput.value = '';
-      descTextarea.value = '';
-      tipoInput.value = '';
+        assuntoInput.value = '';
+        descTextarea.value = '';
+        tipoInput.value = '';
 
-      origemField.select.value = CONSTANTS.VALUES.DEFAULT_ORIGEM_ID.toString();
-      statusField.select.value = CONSTANTS.VALUES.DEFAULT_STATUS_ID.toString();
-      prioridadeField.select.value = CONSTANTS.VALUES.DEFAULT_PRIORIDADE_ID.toString();
+        origemField.select.value = '';
+        statusField.select.value = '';
+        prioridadeField.select.value = '';
+        produtoField.select.value = '';
 
-      grupoSelect.value = '';
-      grupoSelect.dispatchEvent(new Event('change'));
+        grupoSelect.value = '';
+        grupoSelect.dispatchEvent(new Event('change'));
+      });
     };
 
-    actionRow.appendChild(btnLimpar);
+    const btnRememberPrefs = document.createElement('button');
+    btnRememberPrefs.type = 'button';
+    btnRememberPrefs.style.cssText = 'padding: 10px 20px; background: transparent; color: #02ac85; border: 1px solid #02ac85; cursor: pointer; border-radius: 6px; font-weight: bold; transition: all 0.2s ease; margin-left: auto;';
+    btnRememberPrefs.textContent = 'Lembrar preferências';
+    btnRememberPrefs.addEventListener('mouseenter', () => { if (!btnRememberPrefs.dataset.saved) btnRememberPrefs.style.background = '#e6f7f3'; });
+    btnRememberPrefs.addEventListener('mouseleave', () => { if (!btnRememberPrefs.dataset.saved) btnRememberPrefs.style.background = 'transparent'; });
+    btnRememberPrefs.onclick = () => {
+      const selectedGrupoOpt = grupoSelect.options[grupoSelect.selectedIndex];
+      const selectedAgenteOpt = agenteSelect.options[agenteSelect.selectedIndex];
+
+      chrome.storage.local.set({
+        [CONSTANTS.STORAGE.NEW_TICKET_ORIGEM]: origemField.select.value || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_CONTATO]: selectedContact || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_TAG]: selectedTag || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_SERVICO]: selectedService || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_TIPO]: tipoInput.value.trim() || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_STATUS]: statusField.select.value || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_PRIORIDADE]: prioridadeField.select.value || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_GRUPO]: { id: grupoSelect.value || null, name: selectedGrupoOpt ? selectedGrupoOpt.textContent : '' },
+        [CONSTANTS.STORAGE.NEW_TICKET_AGENTE]: { id: agenteSelect.value || null, name: selectedAgenteOpt ? selectedAgenteOpt.textContent : '' },
+        [CONSTANTS.STORAGE.NEW_TICKET_PRODUTO]: produtoField.select.value || null,
+        [CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS]: { n3: cbN3.checked, n2: cbN2.checked }
+      }, () => {
+        const originalText = btnRememberPrefs.textContent;
+        btnRememberPrefs.dataset.saved = 'true';
+        btnRememberPrefs.textContent = 'Preferências Salvas!';
+        btnRememberPrefs.style.background = '#02ac85';
+        btnRememberPrefs.style.color = '#fff';
+        setTimeout(() => {
+          delete btnRememberPrefs.dataset.saved;
+          btnRememberPrefs.textContent = originalText;
+          btnRememberPrefs.style.background = 'transparent';
+          btnRememberPrefs.style.color = '#02ac85';
+        }, 2000);
+      });
+    };
+
+    actionRow.appendChild(btnClearPrefs);
+    actionRow.appendChild(btnRememberPrefs);
     actionRow.appendChild(btnCancel);
     actionRow.appendChild(btnCreate);
     modalBody.appendChild(actionRow);

@@ -368,66 +368,6 @@ export class UIFactory {
     tipoWrapper.appendChild(tipoInput);
     tipoWrapper.appendChild(tipoResultsContainer);
 
-    // ─── "Lembrar Tipo" Button ─────────────────────────────────────────────────
-    /**
-     * Micro-interaction button that persists the selected Tipo value to
-     * chrome.storage.local. Same visual pattern as the level filter button.
-     */
-    const tipoRememberWrapper = document.createElement('div');
-    tipoRememberWrapper.style.cssText =
-      'display: flex; align-items: center; margin-bottom: 12px; width: 100%;';
-
-    const tipoRememberBtnStyle = `
-      font-size: 12px; color: #777; cursor: pointer; margin-left: auto;
-      background: transparent; border: 1px solid #ccc; border-radius: 4px;
-      padding: 4px 10px; display: inline-flex; align-items: center; gap: 5px;
-      transition: all 0.2s ease-in-out; font-family: inherit;
-    `;
-    const tipoRememberBtn = document.createElement('button');
-    tipoRememberBtn.style.cssText = tipoRememberBtnStyle;
-
-    const tipoBookmarkSvg =
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
-    const tipoCheckSvg =
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-
-    tipoRememberWrapper.appendChild(tipoRememberBtn);
-
-    tipoRememberBtn.innerHTML = tipoBookmarkSvg;
-    tipoRememberBtn.appendChild(document.createTextNode(' Lembrar Tipo'));
-
-    tipoRememberBtn.addEventListener('mouseenter', () => {
-      if (!tipoRememberBtn.dataset.saved) {
-        tipoRememberBtn.style.borderColor = '#02ac85';
-        tipoRememberBtn.style.color = '#02ac85';
-      }
-    });
-    tipoRememberBtn.addEventListener('mouseleave', () => {
-      if (!tipoRememberBtn.dataset.saved) {
-        tipoRememberBtn.style.borderColor = '#ccc';
-        tipoRememberBtn.style.color = '#777';
-      }
-    });
-    tipoRememberBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      chrome.storage.local.set({ atlas_tipo_pref: tipoInput.value }, () => {
-        tipoRememberBtn.dataset.saved = 'true';
-        tipoRememberBtn.style.background = '#02ac85';
-        tipoRememberBtn.style.borderColor = '#02ac85';
-        tipoRememberBtn.style.color = '#ffffff';
-        tipoRememberBtn.innerHTML = tipoCheckSvg;
-        tipoRememberBtn.appendChild(document.createTextNode(' Tipo Salvo'));
-        setTimeout(() => {
-          delete tipoRememberBtn.dataset.saved;
-          tipoRememberBtn.style.background = 'transparent';
-          tipoRememberBtn.style.borderColor = '#ccc';
-          tipoRememberBtn.style.color = '#777';
-          tipoRememberBtn.innerHTML = tipoBookmarkSvg;
-          tipoRememberBtn.appendChild(document.createTextNode(' Lembrar Tipo'));
-        }, 2000);
-      });
-    });
-
     const sortedTipos = [...LookupService.getTipos()].sort((a, b) =>
       a.label.localeCompare(b.label),
     );
@@ -575,91 +515,75 @@ export class UIFactory {
     cbN2Label.appendChild(cbN2);
     cbN2Label.appendChild(document.createTextNode('Mostrar Serviço Nível 2'));
 
-    // ─── "Lembrar Preferências" Button ──────────────────────────────────────────
-    /**
-     * Polished micro-interaction button that persists the current checkbox state
-     * to chrome.storage.local. Features a smooth transition from its default
-     * outlined style to a confirmed green state when saved.
-     */
-    const rememberBtn = document.createElement('button');
-    rememberBtn.style.cssText = `
-      font-size: 12px; color: #777; cursor: pointer; margin-left: auto;
-      background: transparent; border: 1px solid #ccc; border-radius: 4px;
-      padding: 4px 10px; display: inline-flex; align-items: center; gap: 5px;
-      transition: all 0.2s ease-in-out; font-family: inherit;
-    `;
 
-    // SVG bookmark icon — default state
-    const bookmarkSvg =
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
-    // SVG checkmark icon — saved state
-    const checkSvg =
-      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-
-    rememberBtn.innerHTML = bookmarkSvg;
-    rememberBtn.appendChild(document.createTextNode(' Lembrar Preferências'));
-
-    rememberBtn.addEventListener('mouseenter', () => {
-      // Only apply hover if not in "saved" state
-      if (!rememberBtn.dataset.saved) {
-        rememberBtn.style.borderColor = '#02ac85';
-        rememberBtn.style.color = '#02ac85';
-      }
-    });
-    rememberBtn.addEventListener('mouseleave', () => {
-      if (!rememberBtn.dataset.saved) {
-        rememberBtn.style.borderColor = '#ccc';
-        rememberBtn.style.color = '#777';
-      }
-    });
-    rememberBtn.addEventListener('click', () => {
-      if (!ContextManager.isValid()) return;
-      const prefs = { n3: cbN3.checked, n2: cbN2.checked };
-      chrome.storage.local.set({ atlas_user_prefs: prefs }, () => {
-        // Transition to confirmed "saved" state with brand green
-        rememberBtn.dataset.saved = 'true';
-        rememberBtn.style.background = '#02ac85';
-        rememberBtn.style.borderColor = '#02ac85';
-        rememberBtn.style.color = '#ffffff';
-        rememberBtn.innerHTML = checkSvg;
-        rememberBtn.appendChild(document.createTextNode(' Preferências Salvas'));
-        // Revert to default after 2 seconds
-        setTimeout(() => {
-          delete rememberBtn.dataset.saved;
-          rememberBtn.style.background = 'transparent';
-          rememberBtn.style.borderColor = '#ccc';
-          rememberBtn.style.color = '#777';
-          rememberBtn.innerHTML = bookmarkSvg;
-          rememberBtn.appendChild(document.createTextNode(' Lembrar Preferências'));
-        }, 2000);
-      });
-    });
 
     filterRow.appendChild(cbN2Label);
     filterRow.appendChild(cbN3Label);
-    filterRow.appendChild(rememberBtn);
 
     // ─── Results Container ─────────────────────────────────────────────────────
     const resultsContainer = document.createElement('ul');
     resultsContainer.className = 'atlas-results-container';
 
-    // ─── Cancel Button ─────────────────────────────────────────────────────────
+    // ─── Action Row ─────────────────────────────────────────────────────────
+    const actionRow = document.createElement('div');
+    actionRow.style.cssText =
+      'display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee; width: 100%;';
+
+    const btnClearPrefs = document.createElement('button');
+    btnClearPrefs.type = 'button';
+    btnClearPrefs.style.cssText = 'padding: 10px 20px; background: transparent; color: #d9534f; border: 1px solid #d9534f; cursor: pointer; border-radius: 6px; font-weight: bold; transition: all 0.2s ease; margin-right: auto;';
+    btnClearPrefs.textContent = 'Limpar preferências';
+    btnClearPrefs.addEventListener('mouseenter', () => { btnClearPrefs.style.background = '#f9ebea'; });
+    btnClearPrefs.addEventListener('mouseleave', () => { btnClearPrefs.style.background = 'transparent'; });
+    btnClearPrefs.onclick = () => {
+      chrome.storage.local.remove(['atlas_tipo_pref', 'atlas_user_prefs'], () => {
+        tipoInput.value = ''; searchInput.value = ''; 
+        cbN2.checked = false;
+        cbN3.checked = false;
+        runSearch();
+      });
+    };
+
+    const btnRememberPrefs = document.createElement('button');
+    btnRememberPrefs.type = 'button';
+    btnRememberPrefs.style.cssText = 'padding: 10px 20px; background: transparent; color: #02ac85; border: 1px solid #02ac85; cursor: pointer; border-radius: 6px; font-weight: bold; transition: all 0.2s ease; margin-left: auto;';
+    btnRememberPrefs.textContent = 'Lembrar preferências';
+    btnRememberPrefs.addEventListener('mouseenter', () => { if (!btnRememberPrefs.dataset.saved) btnRememberPrefs.style.background = '#e6f7f3'; });
+    btnRememberPrefs.addEventListener('mouseleave', () => { if (!btnRememberPrefs.dataset.saved) btnRememberPrefs.style.background = 'transparent'; });
+    btnRememberPrefs.onclick = () => {
+      chrome.storage.local.set({
+        atlas_tipo_pref: tipoInput.value.trim() || null,
+        atlas_user_prefs: { n3: cbN3.checked, n2: cbN2.checked }
+      }, () => {
+        const originalText = btnRememberPrefs.textContent;
+        btnRememberPrefs.dataset.saved = 'true';
+        btnRememberPrefs.textContent = 'Preferências Salvas!';
+        btnRememberPrefs.style.background = '#02ac85';
+        btnRememberPrefs.style.color = '#fff';
+        setTimeout(() => {
+          delete btnRememberPrefs.dataset.saved;
+          btnRememberPrefs.textContent = originalText;
+          btnRememberPrefs.style.background = 'transparent';
+          btnRememberPrefs.style.color = '#02ac85';
+        }, 2000);
+      });
+    };
+
     const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
     btnCancel.style.cssText = `
-      margin-top: 12px; padding: 10px 20px; background: #888; color: white;
-      border: none; cursor: pointer; border-radius: 4px; font-weight: bold;
-      align-self: flex-end; transition: background 0.2s ease;
+      padding: 10px 20px; background: #888; color: white;
+      border: none; cursor: pointer; border-radius: 6px; font-weight: bold;
+      transition: background 0.2s ease;
     `;
     btnCancel.textContent = 'Cancelar';
-    btnCancel.addEventListener('mouseenter', () => {
-      btnCancel.style.background = '#666';
-    });
-    btnCancel.addEventListener('mouseleave', () => {
-      btnCancel.style.background = '#888';
-    });
-    btnCancel.onclick = () => {
-      overlay.remove();
-    };
+    btnCancel.addEventListener('mouseenter', () => { btnCancel.style.background = '#666'; });
+    btnCancel.addEventListener('mouseleave', () => { btnCancel.style.background = '#888'; });
+    btnCancel.onclick = () => overlay.remove();
+
+    actionRow.appendChild(btnClearPrefs);
+    actionRow.appendChild(btnRememberPrefs);
+    actionRow.appendChild(btnCancel);
 
     // ─── Helper: build the allowed-levels set from checkbox state ──────────────
     /**
@@ -728,12 +652,11 @@ export class UIFactory {
     modalBody.appendChild(subtitle);
     modalBody.appendChild(tipoLabel);
     modalBody.appendChild(tipoWrapper);
-    modalBody.appendChild(tipoRememberWrapper);
     modalBody.appendChild(assuntoLabel);
     modalBody.appendChild(searchWrapper);
     modalBody.appendChild(filterRow);
     modalBody.appendChild(resultsContainer);
-    modalBody.appendChild(btnCancel);
+    modalBody.appendChild(actionRow);
 
     // ─── Load saved level preferences from chrome.storage.local ───────────────
     /**

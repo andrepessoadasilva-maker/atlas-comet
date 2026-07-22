@@ -132,8 +132,10 @@ export class NewTicketObserver {
         document.querySelector('.ticket-actions') ||
         document.querySelector('.page-header__actions');
 
-      // Render the button — NewTicketUIFactory handles all positioning logic
-      NewTicketUIFactory.renderNewTicketButton(headerContainer as HTMLElement | null);
+      if (headerContainer) {
+        // Render the button — NewTicketUIFactory handles all positioning logic
+        NewTicketUIFactory.renderNewTicketButton(headerContainer as HTMLElement);
+      }
     }
   }
 }

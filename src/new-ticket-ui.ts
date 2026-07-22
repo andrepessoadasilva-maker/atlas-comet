@@ -339,10 +339,23 @@ export class NewTicketUIFactory {
     const contatoWrapper = document.createElement('div');
     contatoWrapper.style.cssText = selectWrapperStyle;
 
+    // Label row with memorize button (same pattern as other memorizable fields)
+    const contatoLabelRow = document.createElement('div');
+    contatoLabelRow.style.cssText = 'display: flex; align-items: center; margin-bottom: 6px;';
+
     const contatoLabel = document.createElement('label');
     contatoLabel.style.cssText = labelStyle;
-    contatoLabel.textContent = 'Contato';
-    contatoWrapper.appendChild(contatoLabel);
+    contatoLabel.textContent = '⭐ Contato';
+
+    const contatoMemoBtn = document.createElement('button');
+    contatoMemoBtn.type = 'button';
+    contatoMemoBtn.style.cssText = memoBtnBaseStyle;
+    contatoMemoBtn.innerHTML = bookmarkSvg;
+    contatoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+
+    contatoLabelRow.appendChild(contatoLabel);
+    contatoLabelRow.appendChild(contatoMemoBtn);
+    contatoWrapper.appendChild(contatoLabelRow);
 
     const contatoInput = document.createElement('input');
     contatoInput.type = 'text';
@@ -464,6 +477,47 @@ export class NewTicketUIFactory {
 
     contatoWrapper.appendChild(contatoInput);
     contatoWrapper.appendChild(contatoResultsContainer);
+
+    // Contato memo button event handlers
+    contatoMemoBtn.addEventListener('mouseenter', () => {
+      if (!contatoMemoBtn.dataset.saved) {
+        contatoMemoBtn.style.borderColor = '#02ac85';
+        contatoMemoBtn.style.color = '#02ac85';
+      }
+    });
+    contatoMemoBtn.addEventListener('mouseleave', () => {
+      if (!contatoMemoBtn.dataset.saved) {
+        contatoMemoBtn.style.borderColor = '#ccc';
+        contatoMemoBtn.style.color = '#777';
+      }
+    });
+    contatoMemoBtn.addEventListener('click', () => {
+      if (!ContextManager.isValid()) return;
+      if (!selectedContact) {
+        alert('Selecione um contato antes de salvar.');
+        return;
+      }
+      chrome.storage.local.set(
+        { [CONSTANTS.STORAGE.NEW_TICKET_CONTATO]: selectedContact },
+        () => {
+          contatoMemoBtn.dataset.saved = 'true';
+          contatoMemoBtn.style.background = '#02ac85';
+          contatoMemoBtn.style.borderColor = '#02ac85';
+          contatoMemoBtn.style.color = '#ffffff';
+          contatoMemoBtn.innerHTML = checkSvg;
+          contatoMemoBtn.appendChild(document.createTextNode(' Salvo'));
+          setTimeout(() => {
+            delete contatoMemoBtn.dataset.saved;
+            contatoMemoBtn.style.background = 'transparent';
+            contatoMemoBtn.style.borderColor = '#ccc';
+            contatoMemoBtn.style.color = '#777';
+            contatoMemoBtn.innerHTML = bookmarkSvg;
+            contatoMemoBtn.appendChild(document.createTextNode(' Lembrar'));
+          }, 2000);
+        },
+      );
+    });
+
     formContainer.appendChild(contatoWrapper);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1270,6 +1324,7 @@ export class NewTicketUIFactory {
         chrome.storage.local.get(
           [
             CONSTANTS.STORAGE.NEW_TICKET_ORIGEM,
+            CONSTANTS.STORAGE.NEW_TICKET_CONTATO,
             CONSTANTS.STORAGE.NEW_TICKET_TIPO,
             CONSTANTS.STORAGE.NEW_TICKET_STATUS,
             CONSTANTS.STORAGE.NEW_TICKET_PRIORIDADE,
@@ -1291,6 +1346,19 @@ export class NewTicketUIFactory {
                 const match = Array.from(origemField.select.options).find(o => o.textContent === savedStr);
                 if (match) origemField.select.value = match.value;
               }
+            }
+
+            // Restore Contato (stores { id, name, email })
+            const savedContato = result[CONSTANTS.STORAGE.NEW_TICKET_CONTATO];
+            if (savedContato && savedContato.id && savedContato.email) {
+              selectedContact = {
+                id: savedContato.id,
+                name: savedContato.name || '',
+                email: savedContato.email,
+              };
+              contatoInput.value = selectedContact.name
+                ? `"${selectedContact.name}" <${selectedContact.email}>`
+                : selectedContact.email;
             }
 
             // Restore Tipo

@@ -232,12 +232,7 @@ export class NewTicketUIFactory {
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     `;
     const selectWrapperStyle = 'position: relative; margin-bottom: 14px;';
-    const memoBtnBaseStyle = `
-      font-size: 11px; color: #777; cursor: pointer; margin-left: auto;
-      background: transparent; border: 1px solid #ccc; border-radius: 4px;
-      padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px;
-      transition: all 0.2s ease-in-out; font-family: inherit;
-    `;
+    // memoBtnBaseStyle removed
     const bookmarkSvg =
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
     const checkSvg =
@@ -261,11 +256,12 @@ export class NewTicketUIFactory {
     const createDropdownField = (
       labelText: string,
       choices: FieldChoice[],
-      defaultId: number,
-      storageKey: string,
+      _defaultId: number,
+      _storageKey: string,
     ): { wrapper: HTMLDivElement; select: HTMLSelectElement } => {
       const wrapper = document.createElement('div');
       wrapper.style.cssText = selectWrapperStyle;
+      void _defaultId; void _storageKey;
 
       // Label row with memorize button
       const labelRow = document.createElement('div');

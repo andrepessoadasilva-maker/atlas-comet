@@ -333,11 +333,7 @@ export class NewTicketUIFactory {
       });
       memoBtn.addEventListener('click', () => {
         if (!ContextManager.isValid()) return;
-        if (!select.value || select.value === '0' || select.value === 'null') {
-          showValidationError(select, wrapper, `Selecione uma opção válida para ${labelText}.`);
-          return;
-        }
-        chrome.storage.local.set({ [storageKey]: select.value }, () => {
+        chrome.storage.local.set({ [storageKey]: select.value || null }, () => {
           memoBtn.dataset.saved = 'true';
           memoBtn.style.background = '#02ac85';
           memoBtn.style.borderColor = '#02ac85';
@@ -541,12 +537,8 @@ export class NewTicketUIFactory {
     });
     contatoMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
-      if (!selectedContact) {
-        showValidationError(contatoInput, contatoWrapper, 'Selecione um contato antes de salvar.');
-        return;
-      }
       chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_CONTATO]: selectedContact },
+        { [CONSTANTS.STORAGE.NEW_TICKET_CONTATO]: selectedContact || null },
         () => {
           contatoMemoBtn.dataset.saved = 'true';
           contatoMemoBtn.style.background = '#02ac85';
@@ -678,11 +670,7 @@ export class NewTicketUIFactory {
     });
     tipoMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
-      if (!tipoInput.value) {
-        showValidationError(tipoInput, tipoWrapper, 'Selecione um Tipo antes de salvar.');
-        return;
-      }
-      chrome.storage.local.set({ [CONSTANTS.STORAGE.NEW_TICKET_TIPO]: tipoInput.value }, () => {
+      chrome.storage.local.set({ [CONSTANTS.STORAGE.NEW_TICKET_TIPO]: tipoInput.value.trim() || null }, () => {
         tipoMemoBtn.dataset.saved = 'true';
         tipoMemoBtn.style.background = '#02ac85';
         tipoMemoBtn.style.borderColor = '#02ac85';
@@ -786,8 +774,32 @@ export class NewTicketUIFactory {
     cbN2Label.appendChild(cbN2);
     cbN2Label.appendChild(document.createTextNode('Mostrar Serviço Nível 2'));
 
+    const prefsBtn = document.createElement('button');
+    prefsBtn.type = 'button';
+    prefsBtn.style.cssText = 'background: none; border: none; font-size: 11px; color: #777; cursor: pointer; display: flex; align-items: center; gap: 4px; margin-left: auto; border: 1px solid #ccc; padding: 2px 6px; border-radius: 4px; transition: all 0.2s ease;';
+    prefsBtn.innerHTML = bookmarkSvg;
+    prefsBtn.appendChild(document.createTextNode(' Lembrar Preferências'));
+    prefsBtn.addEventListener('mouseenter', () => { if (!prefsBtn.dataset.saved) { prefsBtn.style.borderColor = '#02ac85'; prefsBtn.style.color = '#02ac85'; } });
+    prefsBtn.addEventListener('mouseleave', () => { if (!prefsBtn.dataset.saved) { prefsBtn.style.borderColor = '#ccc'; prefsBtn.style.color = '#777'; } });
+    prefsBtn.addEventListener('click', () => {
+      chrome.storage.local.set(
+        { [CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS]: { n3: cbN3.checked, n2: cbN2.checked } },
+        () => {
+          prefsBtn.dataset.saved = 'true';
+          prefsBtn.style.background = '#02ac85'; prefsBtn.style.borderColor = '#02ac85'; prefsBtn.style.color = '#fff';
+          prefsBtn.innerHTML = checkSvg; prefsBtn.appendChild(document.createTextNode(' Salvo'));
+          setTimeout(() => {
+            delete prefsBtn.dataset.saved;
+            prefsBtn.style.background = 'transparent'; prefsBtn.style.borderColor = '#ccc'; prefsBtn.style.color = '#777';
+            prefsBtn.innerHTML = bookmarkSvg; prefsBtn.appendChild(document.createTextNode(' Lembrar Preferências'));
+          }, 2000);
+        }
+      );
+    });
+
     filterRow.appendChild(cbN2Label);
     filterRow.appendChild(cbN3Label);
+    filterRow.appendChild(prefsBtn);
     servicoContainer.appendChild(filterRow);
 
     // Service results container
@@ -945,13 +957,9 @@ export class NewTicketUIFactory {
     });
     servicoMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
-      if (!selectedService) {
-        showValidationError(searchInput, servicoContainer, 'Selecione um serviço antes de salvar.');
-        return;
-      }
       chrome.storage.local.set(
         { 
-          [CONSTANTS.STORAGE.NEW_TICKET_SERVICO]: selectedService,
+          [CONSTANTS.STORAGE.NEW_TICKET_SERVICO]: selectedService || null,
           [CONSTANTS.STORAGE.NEW_TICKET_LEVEL_PREFS]: { n3: cbN3.checked, n2: cbN2.checked }
         },
         () => {
@@ -1224,13 +1232,9 @@ export class NewTicketUIFactory {
     });
     grupoMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
-      if (!grupoSelect.value || grupoSelect.value === '0' || grupoSelect.value === 'null') {
-        showValidationError(grupoSelect, grupoWrapper, 'Selecione um Grupo antes de salvar.');
-        return;
-      }
       const selectedOpt = grupoSelect.options[grupoSelect.selectedIndex];
       chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_GRUPO]: { id: grupoSelect.value, name: selectedOpt?.textContent || '' } },
+        { [CONSTANTS.STORAGE.NEW_TICKET_GRUPO]: { id: grupoSelect.value || null, name: selectedOpt?.textContent || '' } },
         () => {
           grupoMemoBtn.dataset.saved = 'true';
           grupoMemoBtn.style.background = '#02ac85'; grupoMemoBtn.style.borderColor = '#02ac85'; grupoMemoBtn.style.color = '#ffffff';
@@ -1253,13 +1257,9 @@ export class NewTicketUIFactory {
     });
     agenteMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
-      if (!agenteSelect.value || agenteSelect.value === '0' || agenteSelect.value === 'null') {
-        showValidationError(agenteSelect, agenteWrapper, 'Selecione um Agente antes de salvar.');
-        return;
-      }
       const selectedOpt = agenteSelect.options[agenteSelect.selectedIndex];
       chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_AGENTE]: { id: agenteSelect.value, name: selectedOpt?.textContent || '' } },
+        { [CONSTANTS.STORAGE.NEW_TICKET_AGENTE]: { id: agenteSelect.value || null, name: selectedOpt?.textContent || '' } },
         () => {
           agenteMemoBtn.dataset.saved = 'true';
           agenteMemoBtn.style.background = '#02ac85'; agenteMemoBtn.style.borderColor = '#02ac85'; agenteMemoBtn.style.color = '#ffffff';
@@ -1407,12 +1407,8 @@ export class NewTicketUIFactory {
     });
     tagMemoBtn.addEventListener('click', () => {
       if (!ContextManager.isValid()) return;
-      if (!selectedTag) {
-        showValidationError(tagInput, tagWrapper, 'Selecione uma tag antes de salvar.');
-        return;
-      }
       chrome.storage.local.set(
-        { [CONSTANTS.STORAGE.NEW_TICKET_TAG]: selectedTag },
+        { [CONSTANTS.STORAGE.NEW_TICKET_TAG]: selectedTag || null },
         () => {
           tagMemoBtn.dataset.saved = 'true';
           tagMemoBtn.style.background = '#02ac85'; tagMemoBtn.style.borderColor = '#02ac85'; tagMemoBtn.style.color = '#ffffff';
@@ -1490,6 +1486,7 @@ export class NewTicketUIFactory {
     actionRow.style.cssText =
       'display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee;';
 
+
     const btnCancel = document.createElement('button');
     btnCancel.type = 'button';
     btnCancel.style.cssText =
@@ -1553,7 +1550,40 @@ export class NewTicketUIFactory {
         btnCreate.style.opacity = '1';
       }
     };
+    const btnLimpar = document.createElement('button');
+    btnLimpar.type = 'button';
+    btnLimpar.style.cssText =
+      'padding: 10px 20px; background: transparent; color: #888; border: 1px solid #ccc; cursor: pointer; border-radius: 6px; font-weight: bold; transition: all 0.2s ease; margin-right: auto;';
+    btnLimpar.textContent = 'Limpar Formulário';
+    btnLimpar.addEventListener('mouseenter', () => { btnLimpar.style.background = '#f5f5f5'; });
+    btnLimpar.addEventListener('mouseleave', () => { btnLimpar.style.background = 'transparent'; });
+    btnLimpar.onclick = () => {
+      contatoInput.value = '';
+      selectedContact = null;
+      contatoResultsContainer.style.display = 'none';
 
+      searchInput.value = '';
+      selectedService = null;
+      selectedServiceBadge.style.display = 'none';
+      while (resultsContainer.firstChild) resultsContainer.removeChild(resultsContainer.firstChild);
+
+      tagInput.value = '';
+      selectedTag = null;
+      tagResultsContainer.style.display = 'none';
+
+      assuntoInput.value = '';
+      descTextarea.value = '';
+      tipoInput.value = '';
+
+      origemField.select.value = CONSTANTS.VALUES.DEFAULT_ORIGEM_ID.toString();
+      statusField.select.value = CONSTANTS.VALUES.DEFAULT_STATUS_ID.toString();
+      prioridadeField.select.value = CONSTANTS.VALUES.DEFAULT_PRIORIDADE_ID.toString();
+
+      grupoSelect.value = '';
+      grupoSelect.dispatchEvent(new Event('change'));
+    };
+
+    actionRow.appendChild(btnLimpar);
     actionRow.appendChild(btnCancel);
     actionRow.appendChild(btnCreate);
     modalBody.appendChild(actionRow);

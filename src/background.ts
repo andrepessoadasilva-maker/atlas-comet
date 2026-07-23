@@ -40,4 +40,36 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(
   },
 );
 
+// ─── Cross-Origin Fetch Proxy ─────────────────────────────────────────────
+// Content scripts are bound to the page's origin for fetch requests (CORS).
+// The background service worker, however, can fetch any URL for which the
+// extension has host_permissions (freshdesk.com, myfreshworks.com, etc.).
+//
+// This handler allows content scripts to request a URL fetch via:
+//   chrome.runtime.sendMessage({ type: 'FETCH_URL', url: '...' }, callback)
+//
+// Used by Layer 7 (Team Inbox company resolution) to fetch the Team Inbox
+// page from myfreshworks.com while the content script runs on freshdesk.com.
+chrome.runtime.onMessage.addListener(
+  (
+    message: { type: string; url?: string },
+    _sender: chrome.runtime.MessageSender,
+    sendResponse: (response: { success: boolean; data?: string; error?: string }) => void,
+  ) => {
+    if (message.type === 'FETCH_URL' && message.url) {
+      fetch(message.url, {
+        credentials: 'include',
+        headers: { 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+      })
+        .then((res) => res.text())
+        .then((text) => sendResponse({ success: true, data: text }))
+        .catch((err) => sendResponse({ success: false, error: String(err) }));
 
+      // Return true to indicate we will call sendResponse asynchronously.
+      // Without this, Chrome closes the message channel immediately.
+      return true;
+    }
+    // For other message types, return undefined (synchronous, no response needed)
+    return undefined;
+  },
+);

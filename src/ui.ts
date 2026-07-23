@@ -1355,6 +1355,41 @@ export class UIFactory {
   }
 
   /**
+   * Parses the raw HTML from the Team Inbox SPA and extracts the company name
+   * from the "Conversa iniciada de" section.
+   *
+   * @param html - Raw HTML string of the Team Inbox page
+   * @returns Company name or null if not found
+   */
+  private static extractCompanyFromTeamInboxHtml(html: string): string | null {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const details = Array.from(doc.querySelectorAll('.message-detail'));
+
+      for (const el of details) {
+        if (el.textContent?.trim().includes('Conversa iniciada de')) {
+          const parent = el.closest('.more-details');
+          if (parent) {
+            const linkSpan = parent.querySelector('span[data-original-title]');
+            if (linkSpan) {
+              const title = linkSpan.getAttribute('data-original-title');
+              if (title) {
+                // Example title: "Construtora Vasco - CV - Gestor - Configurações"
+                // The company is the first segment before " - "
+                return title.split(' - ')[0].trim();
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[Atlas Comet] Erro ao extrair empresa do Team Inbox HTML:', e);
+    }
+    return null;
+  }
+
+  /**
    * Cleans and formats a name to Title Case, removing metadata after hyphens
    * and handling ellipses.
    *
@@ -1822,6 +1857,65 @@ export class UIFactory {
         }
       } catch (e) {
         console.log('[Atlas Comet] Erro no Layer 6 API (Requester→Company)', e);
+      }
+    }
+
+    // ─── Layer 7: Team Inbox page scraping via background fetch ────────────
+    // Last resort for tickets where the company is ONLY available inside the
+    // Team Inbox chat page (e.g., in the "Conversa iniciada de" section).
+    //
+    // How it works:
+    // 1. Find the "Take to Team Inbox" link in the ticket conversation body
+    //    (rendered inside the ticket page as an embedded HTML link).
+    // 2. Send the URL to the background service worker via chrome.runtime.sendMessage.
+    //    The background has host_permissions for *.myfreshworks.com/* and can
+    //    fetch cross-origin without CORS restrictions.
+    // 3. Parse the returned HTML for the company name. The Team Inbox SPA
+    //    often embeds initial state data (chat metadata, widget info) in
+    //    inline <script> tags or data attributes that include the page title
+    //    where the chat originated (e.g., "Construtora Vasco - CV - Gestor").
+    //    We extract the company name as the first segment before " - ".
+    if (rawCompany === 'Empresa Indefinida') {
+      // Search for Team Inbox link in the ticket conversation body.
+      // It appears as: <a href="https://...myfreshworks.com/crm/messaging/...">Team Inbox</a>
+      const teamInboxLink = document.querySelector<HTMLAnchorElement>(
+        'a[href*="/crm/messaging/"]',
+      );
+
+      if (teamInboxLink && ContextManager.isValid()) {
+        try {
+          // Fetch the Team Inbox page HTML via the background script proxy.
+          // This bypasses CORS since the service worker has host_permissions.
+          const fetchResponse = await new Promise<{
+            success: boolean;
+            data?: string;
+            error?: string;
+          }>((resolve) => {
+            const timeoutId = setTimeout(() => {
+              resolve({ success: false, error: 'Timeout (8s)' });
+            }, 8000);
+
+            chrome.runtime.sendMessage(
+              { type: 'FETCH_URL', url: teamInboxLink.href },
+              (response) => {
+                clearTimeout(timeoutId);
+                resolve(response || { success: false, error: 'No response from background' });
+              },
+            );
+          });
+
+          if (fetchResponse.success && fetchResponse.data) {
+            const extractedCompany = this.extractCompanyFromTeamInboxHtml(fetchResponse.data);
+            if (extractedCompany) {
+              rawCompany = extractedCompany;
+              console.log(`[Atlas Comet] Layer 7: Empresa extraída do Team Inbox: "${rawCompany}"`);
+            }
+          } else {
+            console.log('[Atlas Comet] Layer 7: Fetch do Team Inbox falhou:', fetchResponse.error);
+          }
+        } catch (e) {
+          console.log('[Atlas Comet] Erro no Layer 7 (Team Inbox fetch)', e);
+        }
       }
     }
 

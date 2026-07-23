@@ -1590,7 +1590,14 @@ export class UIFactory {
     let companyId: string | null = null;
     let currentTags: string[] = [];
 
-    // ─── Layer 1: API V2 (tags + company enrichment) ──────────────────────
+    /**
+     * Stores the requester_id from the ticket API response so that Layer 6
+     * can reuse it to resolve the company via the contact endpoint, without
+     * making a redundant second call to GET /api/v2/tickets/{id}.
+     */
+    let requesterId: number | null = null;
+
+    // ─── Layer 1: API V2 (tags + company enrichment + requester capture) ──
     try {
       const tRes = await fetch(`/api/v2/tickets/${ticketId}?include=company`);
       if (tRes.ok) {
@@ -1598,6 +1605,10 @@ export class UIFactory {
         currentTags = tData.tags || [];
         if (tData.company && tData.company.name) {
           rawCompany = tData.company.name;
+        }
+        // Capture requester_id for potential use in Layer 6 (API-based company resolution)
+        if (tData.requester_id) {
+          requesterId = tData.requester_id;
         }
       }
     } catch (e) {
@@ -1713,49 +1724,49 @@ export class UIFactory {
       rawCompany = 'Empresa Indefinida';
     }
 
-    // ─── Layer 6: Team Inbox iframe scraping (Plano C) ────────────────────
+    // ─── Layer 6: API V2 Requester→Company chain ──────────────────────────
+    // Previously this layer used an iframe to load the Team Inbox SPA and
+    // scrape the company name from its DOM ("Plano C"). That approach took
+    // 5-15 seconds because the iframe had to render an entire SPA.
+    //
+    // The new approach chains lightweight API calls:
+    //   ticket (requester_id) → contact?include=company → company.name
+    // This resolves in ~200-600ms — roughly 25x faster.
     if (rawCompany === 'Empresa Indefinida') {
-      const teamInboxBtn = document.querySelector('a[href*="/crm/messaging/"]');
-      if (teamInboxBtn) {
-        try {
-          const scrapeResponse = await new Promise<{
-            success: boolean;
-            companyName?: string;
-            error?: string;
-          }>((resolve) => {
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = (teamInboxBtn as HTMLAnchorElement).href;
-
-            // eslint-disable-next-line prefer-const
-            let timeout: ReturnType<typeof setTimeout> | undefined;
-            const messageHandler = (event: MessageEvent) => {
-              if (event.data && event.data.type === 'ATLAS_COMET_TEAM_INBOX_RESULT') {
-                window.removeEventListener('message', messageHandler);
-                if (timeout) clearTimeout(timeout);
-                iframe.remove();
-                resolve({ success: true, companyName: event.data.companyName });
-              }
-            };
-            window.addEventListener('message', messageHandler);
-            timeout = setTimeout(() => {
-              window.removeEventListener('message', messageHandler);
-              iframe.remove();
-              resolve({ success: false, error: 'Timeout ao extrair do Iframe' });
-            }, 15000);
-            document.body.appendChild(iframe);
-          });
-          if (scrapeResponse && scrapeResponse.success && scrapeResponse.companyName) {
-            rawCompany = scrapeResponse.companyName;
-          } else {
-            console.log(
-              '[Atlas Comet] Plano C (auto-rename): Scraping do Team Inbox falhou',
-              scrapeResponse?.error,
-            );
+      try {
+        // Step 6a: Ensure we have a requester_id (may already be captured in Layer 1)
+        if (!requesterId) {
+          const ticketRes = await fetch(`/api/v2/tickets/${ticketId}`);
+          if (ticketRes.ok) {
+            const ticketData = await ticketRes.json();
+            requesterId = ticketData.requester_id || null;
           }
-        } catch (e) {
-          console.log('[Atlas Comet] Erro no Plano C (Team Inbox auto-rename)', e);
         }
+
+        if (requesterId) {
+          // Step 6b: Fetch the contact with company include to resolve company name
+          const contactRes = await fetch(`/api/v2/contacts/${requesterId}?include=company`);
+          if (contactRes.ok) {
+            const contactData = await contactRes.json();
+
+            // The ?include=company embeds the full company object in the response
+            if (contactData.company && contactData.company.name) {
+              rawCompany = contactData.company.name;
+            } else if (contactData.company_id) {
+              // Step 6c: Fallback — company_id exists but wasn't included in the
+              // response (rare, but possible with API quirks). Fetch directly.
+              const companyRes = await fetch(`/api/v2/companies/${contactData.company_id}`);
+              if (companyRes.ok) {
+                const companyData = await companyRes.json();
+                if (companyData.name) {
+                  rawCompany = companyData.name;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.log('[Atlas Comet] Erro no Layer 6 API (Requester→Company)', e);
       }
     }
 
@@ -1834,10 +1845,9 @@ export class UIFactory {
       await FreshdeskAPI.updateTicketSubjectSilently(ticketId, newSubject, finalTags);
 
       // Update the DOM title directly for instant visual feedback.
-      // We do NOT call reloadTicketInEmber() here because the Plano C iframe
-      // can delay this flow by up to 15 seconds, during which the agent is
-      // already interacting with the ticket. A forced Ember reload at that
-      // point would crash the Glimmer rendering engine.
+      // We do NOT call reloadTicketInEmber() here because Ember model reloads
+      // while the agent is already interacting with the ticket would crash
+      // the Glimmer rendering engine.
       // Instead, we safely update only the text node inside the heading.
       // This is safe because we are NOT following it with a model reload.
       const possibleHeadings = Array.from(

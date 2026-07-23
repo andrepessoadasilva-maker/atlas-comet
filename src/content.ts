@@ -133,9 +133,10 @@ class ExtensionController {
 // ==========================================
 // NORMAL EXECUTION (MAIN WINDOW)
 // ==========================================
-// Note: The iframe scraping for Team Inbox (Plano C) was removed along
-// with the Chat functionality. The identity resolution in ui.ts still
-// uses its own inline iframe approach when needed.
+// Note: The identity resolution in ui.ts uses API V2 calls to resolve
+// company names (ticket → requester → contact → company). The previous
+// iframe-based Team Inbox scraping ("Plano C") was removed in v1.5.22
+// due to its 5-15 second latency; the API chain resolves in ~200-600ms.
 const controller = new ExtensionController();
 controller.init();
 

@@ -1615,37 +1615,92 @@ export class UIFactory {
       console.log('[Atlas Comet] Erro ao buscar tags atuais', e);
     }
 
-    // ─── Layer 2: Shadow DOM (legacy layout) ──────────────────────────────
-    const mfeApp = document.querySelector(
-      'mfe-application[app-id="fw-unified-mfe--contact-info"]',
-    ) as HTMLElement & { shadowRoot: ShadowRoot };
-    if (mfeApp && mfeApp.shadowRoot) {
-      const shadowRoot = mfeApp.shadowRoot;
-      const clientEl = shadowRoot.querySelector('a[href*="/contacts/"]');
-      if (clientEl) {
-        rawClient = clientEl.textContent?.trim() || rawClient;
-        const matchId = (clientEl as HTMLAnchorElement).href.match(/\/contacts\/(\d+)/);
-        if (matchId) contactId = matchId[1];
-      }
-      const companyEl = shadowRoot.querySelector('a[href*="/companies/"]');
-      if (companyEl) {
-        rawCompany = companyEl.textContent?.trim() || rawCompany;
-        const matchId = (companyEl as HTMLAnchorElement).href.match(/\/companies\/(\d+)/);
-        if (matchId) companyId = matchId[1];
-      } else {
-        const anyComp = shadowRoot.querySelector(
-          'a[aria-label*="Go to"], a[aria-label*="Ir para"]',
-        );
-        if (anyComp) {
-          const ariaMatch = anyComp
-            .getAttribute('aria-label')
-            ?.match(/(?:Go to|Ir para)\s+(.+)/i);
-          if (ariaMatch && ariaMatch[1]) rawCompany = ariaMatch[1].trim();
+    // ─── Layer 2: MFE Contact Info Widget (Shadow DOM) ──────────────────────
+    // Freshdesk renders the contact/company info inside a Micro Front End (MFE)
+    // web component that uses Shadow DOM. The element tag has changed over time:
+    //   - Legacy (pre-2026): <mfe-application app-id="fw-unified-mfe--contact-info">
+    //   - Current (mid-2026): <fw-unified-mfe--contact-info> (standalone custom element)
+    // We try both selectors and look for an open shadowRoot on whichever we find.
+    //
+    // Inside the shadow root, the structure contains:
+    //   - Client: <a href="https://...freshdesk.com/a/contacts/{id}">Name</a>
+    //   - Company: <a href="https://...freshdesk.com/a/companies/{id}" aria-label="Go to COMPANY">COMPANY</a>
+
+    /**
+     * Helper: extracts client name, contactId, company name, and companyId
+     * from a given root element (can be a ShadowRoot or a regular HTMLElement).
+     * This avoids duplicating the scraping logic across Layer 2 and 2.5.
+     */
+    const extractFromRoot = (root: ShadowRoot | HTMLElement): void => {
+      // Extract client
+      if (rawClient === 'Cliente Indefinido' || !contactId) {
+        const clientEl = root.querySelector('a[href*="/contacts/"]');
+        if (clientEl) {
+          const nameText = clientEl.textContent?.trim();
+          if (nameText && rawClient === 'Cliente Indefinido') rawClient = nameText;
+          if (!contactId) {
+            const matchId = (clientEl as HTMLAnchorElement).href.match(/\/contacts\/(\d+)/);
+            if (matchId) contactId = matchId[1];
+          }
         }
+      }
+      // Extract company — try direct link first, then aria-label fallback
+      if (rawCompany === 'Empresa Indefinida' || !companyId) {
+        const companyEl = root.querySelector('a[href*="/companies/"]');
+        if (companyEl) {
+          const companyText = companyEl.textContent?.trim();
+          if (companyText && rawCompany === 'Empresa Indefinida') rawCompany = companyText;
+          if (!companyId) {
+            const matchId = (companyEl as HTMLAnchorElement).href.match(/\/companies\/(\d+)/);
+            if (matchId) companyId = matchId[1];
+          }
+        } else {
+          // Fallback: some Freshdesk layouts only expose the company name
+          // via aria-label on a generic link (e.g., "Go to DUE EMPREENDIMENTOS")
+          const anyComp = root.querySelector(
+            'a[aria-label*="Go to"], a[aria-label*="Ir para"]',
+          );
+          if (anyComp) {
+            const ariaMatch = anyComp
+              .getAttribute('aria-label')
+              ?.match(/(?:Go to|Ir para)\s+(.+)/i);
+            if (ariaMatch && ariaMatch[1]) rawCompany = ariaMatch[1].trim();
+          }
+        }
+      }
+    };
+
+    // Step 2a: Try finding the MFE custom element and accessing its shadow root.
+    // The new standalone element `fw-unified-mfe--contact-info` is checked first,
+    // then the legacy `mfe-application` wrapper, to cover both old and new layouts.
+    const mfeApp = (
+      document.querySelector('fw-unified-mfe--contact-info') ||
+      document.querySelector('mfe-application[app-id="fw-unified-mfe--contact-info"]')
+    ) as HTMLElement | null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contactShadowRoot = mfeApp ? (mfeApp as any).shadowRoot as ShadowRoot | null : null;
+
+    if (contactShadowRoot) {
+      extractFromRoot(contactShadowRoot);
+    }
+
+    // ─── Layer 2.5: MFE mount root in regular DOM ─────────────────────────
+    // In some Freshdesk layouts, the MFE content is NOT inside a shadow root
+    // but rendered directly into a div with data-testid="mfe-shadow-mount-root"
+    // or id="fw-unified-mfe--contact-info". This covers that scenario.
+    if (rawClient === 'Cliente Indefinido' || rawCompany === 'Empresa Indefinida') {
+      const mfeMountRoot = (
+        document.querySelector('div[data-testid="mfe-shadow-mount-root"]') ||
+        document.getElementById('fw-unified-mfe--contact-info')
+      ) as HTMLElement | null;
+      if (mfeMountRoot) {
+        extractFromRoot(mfeMountRoot);
       }
     }
 
-    // ─── Layer 3: Main DOM (new Freshdesk layout — June/2026) ─────────────
+    // ─── Layer 3: Main DOM fallback (broad selectors) ─────────────────────
+    // Catches links that might be in the regular DOM outside any MFE wrapper.
     if (rawClient === 'Cliente Indefinido' || !contactId) {
       const clientElMain = document.querySelector<HTMLAnchorElement>('a[href*="/a/contacts/"]');
       if (clientElMain) {

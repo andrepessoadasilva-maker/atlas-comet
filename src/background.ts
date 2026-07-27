@@ -50,11 +50,14 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(
 //
 // Used by Layer 7 (Team Inbox company resolution) to fetch the Team Inbox
 // page from myfreshworks.com while the content script runs on freshdesk.com.
+type GhostResponse = { success?: boolean; data?: string; error?: string; companyName?: string | null } | undefined;
+const pendingGhostRequests: { [tabId: number]: (response: GhostResponse) => void } = {};
+
 chrome.runtime.onMessage.addListener(
   (
-    message: { type: string; url?: string },
-    _sender: chrome.runtime.MessageSender,
-    sendResponse: (response: { success: boolean; data?: string; error?: string }) => void,
+    message: { type: string; url?: string; action?: string; companyName?: string | null },
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response: GhostResponse) => void,
   ) => {
     if (message.type === 'FETCH_URL' && message.url) {
       fetch(message.url, {
@@ -64,12 +67,43 @@ chrome.runtime.onMessage.addListener(
         .then((res) => res.text())
         .then((text) => sendResponse({ success: true, data: text }))
         .catch((err) => sendResponse({ success: false, error: String(err) }));
-
-      // Return true to indicate we will call sendResponse asynchronously.
-      // Without this, Chrome closes the message channel immediately.
       return true;
     }
-    // For other message types, return undefined (synchronous, no response needed)
+
+    if (message.action === 'OPEN_GHOST_TAB' && message.url) {
+      const ghostUrl = message.url + (message.url.includes('?') ? '&' : '?') + 'atlas_ghost=1';
+      chrome.tabs.create({ url: ghostUrl, active: false }, (tab) => {
+        if (tab && tab.id) {
+          const tabId = tab.id;
+          pendingGhostRequests[tabId] = sendResponse;
+          // Set a failsafe timeout in case the tab crashes or never loads
+          setTimeout(() => {
+            if (pendingGhostRequests[tabId]) {
+              pendingGhostRequests[tabId]({ companyName: null });
+              delete pendingGhostRequests[tabId];
+              chrome.tabs.remove(tabId).catch(() => {});
+            }
+          }, 25000);
+        } else {
+          sendResponse({ companyName: null });
+        }
+      });
+      return true;
+    }
+
+    if (message.action === 'GHOST_TAB_RESULT') {
+      if (sender.tab && sender.tab.id) {
+        const tabId = sender.tab.id;
+        const callback = pendingGhostRequests[tabId];
+        if (callback) {
+          callback({ companyName: message.companyName });
+          delete pendingGhostRequests[tabId];
+        }
+        chrome.tabs.remove(tabId).catch(() => {});
+      }
+      return undefined;
+    }
+
     return undefined;
   },
 );

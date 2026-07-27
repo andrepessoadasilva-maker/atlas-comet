@@ -1162,12 +1162,13 @@ export class UIFactory {
           rawCompany = 'Empresa Indefinida';
         }
 
-        // PASSO 4 (PLANO C): Fallback no Team Inbox via Iframe Oculto (Caso Plano A e B falhem)
-        // Solução 100% invisível: injetamos o Team Inbox num Iframe com display: none.
-        // O nosso content script (.all_frames=true) é injetado lá dentro, lê o DOM
-        // e nos devolve o nome da empresa via postMessage.
+        // PASSO 4 (PLANO C): Fallback no Team Inbox via Ghost Tab
+        // Opens a hidden background tab to load the Team Inbox SPA and scrape
+        // the company name. The Ghost Tab is detected by the content script
+        // (Route 0 in content.ts) which polls the rendered DOM and reports
+        // back via GHOST_TAB_RESULT → background.ts → callback here.
         if (rawCompany === 'Empresa Indefinida') {
-          const teamInboxBtn = document.querySelector('a[href*="/crm/messaging/"]');
+          const teamInboxBtn = document.querySelector<HTMLAnchorElement>('a[href*="/crm/messaging/"]');
           if (teamInboxBtn) {
             try {
               const scrapeResponse = await new Promise<{
@@ -1175,43 +1176,39 @@ export class UIFactory {
                 companyName?: string;
                 error?: string;
               }>((resolve) => {
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = (teamInboxBtn as HTMLAnchorElement).href;
+                // Safety timeout in case the Ghost Tab never responds
+                const timeoutId = setTimeout(() => {
+                  resolve({ success: false, error: 'Timeout (30s) - Ghost Tab não respondeu' });
+                }, 30000);
 
-                // eslint-disable-next-line prefer-const
-                let timeout: ReturnType<typeof setTimeout> | undefined;
-                const messageHandler = (event: MessageEvent) => {
-                  if (event.data && event.data.type === 'ATLAS_COMET_TEAM_INBOX_RESULT') {
-                    window.removeEventListener('message', messageHandler);
-                    if (timeout) clearTimeout(timeout);
-                    iframe.remove();
-                    resolve({ success: true, companyName: event.data.companyName });
-                  }
-                };
-
-                window.addEventListener('message', messageHandler);
-
-                // Timeout de segurança de 15s
-                timeout = setTimeout(() => {
-                  window.removeEventListener('message', messageHandler);
-                  iframe.remove();
-                  resolve({ success: false, error: 'Timeout ao extrair do Iframe' });
-                }, 15000);
-
-                document.body.appendChild(iframe);
+                chrome.runtime.sendMessage(
+                  { action: 'OPEN_GHOST_TAB', url: teamInboxBtn.href },
+                  (response) => {
+                    clearTimeout(timeoutId);
+                    if (chrome.runtime.lastError) {
+                      resolve({ success: false, error: chrome.runtime.lastError.message });
+                      return;
+                    }
+                    if (response && response.companyName) {
+                      resolve({ success: true, companyName: response.companyName });
+                    } else {
+                      resolve({ success: false, error: 'Empresa não encontrada no Ghost Tab' });
+                    }
+                  },
+                );
               });
 
               if (scrapeResponse && scrapeResponse.success && scrapeResponse.companyName) {
                 rawCompany = scrapeResponse.companyName;
+                console.log(`[Atlas Comet] Plano C: Empresa encontrada via Ghost Tab: "${rawCompany}"`);
               } else {
                 console.log(
-                  '[Atlas Comet] Plano C: Scraping do Team Inbox via Iframe falhou',
+                  '[Atlas Comet] Plano C: Scraping do Team Inbox via Ghost Tab falhou',
                   scrapeResponse?.error,
                 );
               }
             } catch (e) {
-              console.log('[Atlas Comet] Erro no Plano C (Team Inbox)', e);
+              console.log('[Atlas Comet] Erro no Plano C (Team Inbox Ghost Tab)', e);
             }
           }
         }
@@ -1354,40 +1351,11 @@ export class UIFactory {
     }
   }
 
-  /**
-   * Parses the raw HTML from the Team Inbox SPA and extracts the company name
-   * from the "Conversa iniciada de" section.
-   *
-   * @param html - Raw HTML string of the Team Inbox page
-   * @returns Company name or null if not found
-   */
-  private static extractCompanyFromTeamInboxHtml(html: string): string | null {
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const details = Array.from(doc.querySelectorAll('.message-detail'));
-
-      for (const el of details) {
-        if (el.textContent?.trim().includes('Conversa iniciada de')) {
-          const parent = el.closest('.more-details');
-          if (parent) {
-            const linkSpan = parent.querySelector('span[data-original-title]');
-            if (linkSpan) {
-              const title = linkSpan.getAttribute('data-original-title');
-              if (title) {
-                // Example title: "Construtora Vasco - CV - Gestor - Configurações"
-                // The company is the first segment before " - "
-                return title.split(' - ')[0].trim();
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.log('[Atlas Comet] Erro ao extrair empresa do Team Inbox HTML:', e);
-    }
-    return null;
-  }
+  // NOTE: extractCompanyFromTeamInboxHtml was removed in v1.5.43.
+  // It tried to parse raw SPA HTML via DOMParser, but SPA pages return an
+  // empty shell (<div id="app"></div>) without rendered content. The Ghost Tab
+  // approach (OPEN_GHOST_TAB → content.ts Route 0) replaces it by actually
+  // loading the SPA in a browser tab where JavaScript renders the DOM.
 
   /**
    * Cleans and formats a name to Title Case, removing metadata after hyphens
@@ -1860,21 +1828,21 @@ export class UIFactory {
       }
     }
 
-    // ─── Layer 7: Team Inbox page scraping via background fetch ────────────
+    // ─── Layer 7: Team Inbox company via Ghost Tab ────────────────────────
     // Last resort for tickets where the company is ONLY available inside the
     // Team Inbox chat page (e.g., in the "Conversa iniciada de" section).
     //
     // How it works:
-    // 1. Find the "Take to Team Inbox" link in the ticket conversation body
-    //    (rendered inside the ticket page as an embedded HTML link).
-    // 2. Send the URL to the background service worker via chrome.runtime.sendMessage.
-    //    The background has host_permissions for *.myfreshworks.com/* and can
-    //    fetch cross-origin without CORS restrictions.
-    // 3. Parse the returned HTML for the company name. The Team Inbox SPA
-    //    often embeds initial state data (chat metadata, widget info) in
-    //    inline <script> tags or data attributes that include the page title
-    //    where the chat originated (e.g., "Construtora Vasco - CV - Gestor").
-    //    We extract the company name as the first segment before " - ".
+    // 1. Find the "Take to Team Inbox" link in the ticket conversation body.
+    // 2. Open a hidden background tab (Ghost Tab) via background.ts which
+    //    loads the Team Inbox SPA and lets JavaScript render the DOM.
+    // 3. content.ts Route 0 detects the Ghost Tab (atlas_ghost=1 param),
+    //    polls the rendered DOM for company name, and reports back.
+    //
+    // Why Ghost Tab instead of FETCH_URL:
+    // The Team Inbox is a SPA — raw HTML fetch returns an empty shell
+    // (<div id="app"></div>) without any rendered content. The Ghost Tab
+    // lets the browser actually execute the SPA JavaScript.
     if (rawCompany === 'Empresa Indefinida') {
       // Search for Team Inbox link in the ticket conversation body.
       // It appears as: <a href="https://...myfreshworks.com/crm/messaging/...">Team Inbox</a>
@@ -1884,37 +1852,45 @@ export class UIFactory {
 
       if (teamInboxLink && ContextManager.isValid()) {
         try {
-          // Fetch the Team Inbox page HTML via the background script proxy.
-          // This bypasses CORS since the service worker has host_permissions.
-          const fetchResponse = await new Promise<{
+          // Open a Ghost Tab to scrape the Team Inbox SPA.
+          // The background script creates a hidden tab, the content script
+          // (Route 0) scrapes it, and sends the result back via GHOST_TAB_RESULT.
+          const scrapeResponse = await new Promise<{
             success: boolean;
-            data?: string;
+            companyName?: string;
             error?: string;
           }>((resolve) => {
+            // Safety timeout — Ghost Tab has its own 20s timeout, but this
+            // catches cases where the tab crashes or message is lost
             const timeoutId = setTimeout(() => {
-              resolve({ success: false, error: 'Timeout (8s)' });
-            }, 8000);
+              resolve({ success: false, error: 'Timeout (30s) - Ghost Tab não respondeu' });
+            }, 30000);
 
             chrome.runtime.sendMessage(
-              { type: 'FETCH_URL', url: teamInboxLink.href },
+              { action: 'OPEN_GHOST_TAB', url: teamInboxLink.href },
               (response) => {
                 clearTimeout(timeoutId);
-                resolve(response || { success: false, error: 'No response from background' });
+                if (chrome.runtime.lastError) {
+                  resolve({ success: false, error: chrome.runtime.lastError.message });
+                  return;
+                }
+                if (response && response.companyName) {
+                  resolve({ success: true, companyName: response.companyName });
+                } else {
+                  resolve({ success: false, error: 'Empresa não encontrada no Ghost Tab' });
+                }
               },
             );
           });
 
-          if (fetchResponse.success && fetchResponse.data) {
-            const extractedCompany = this.extractCompanyFromTeamInboxHtml(fetchResponse.data);
-            if (extractedCompany) {
-              rawCompany = extractedCompany;
-              console.log(`[Atlas Comet] Layer 7: Empresa extraída do Team Inbox: "${rawCompany}"`);
-            }
+          if (scrapeResponse.success && scrapeResponse.companyName) {
+            rawCompany = scrapeResponse.companyName;
+            console.log(`[Atlas Comet] Layer 7: Empresa extraída do Team Inbox via Ghost Tab: "${rawCompany}"`);
           } else {
-            console.log('[Atlas Comet] Layer 7: Fetch do Team Inbox falhou:', fetchResponse.error);
+            console.log('[Atlas Comet] Layer 7: Ghost Tab falhou:', scrapeResponse.error);
           }
         } catch (e) {
-          console.log('[Atlas Comet] Erro no Layer 7 (Team Inbox fetch)', e);
+          console.log('[Atlas Comet] Erro no Layer 7 (Team Inbox Ghost Tab)', e);
         }
       }
     }

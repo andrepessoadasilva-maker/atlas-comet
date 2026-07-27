@@ -1162,53 +1162,31 @@ export class UIFactory {
           rawCompany = 'Empresa Indefinida';
         }
 
-        // PASSO 4 (PLANO C): Fallback no Team Inbox via Ghost Tab
-        // Opens a hidden background tab to load the Team Inbox SPA and scrape
-        // the company name. The Ghost Tab is detected by the content script
-        // (Route 0 in content.ts) which polls the rendered DOM and reports
-        // back via GHOST_TAB_RESULT → background.ts → callback here.
+        // PASSO 4 (PLANO C): Fallback no Team Inbox via Iframe Oculto (100% invisível)
+        // Em vez de abrir uma aba oculta (Ghost Tab) que o usuário consegue ver
+        // abrindo na barra de abas do navegador, carregamos o SPA do Team Inbox
+        // em um iframe oculto (1px fora da tela) na própria página.
+        // O content.ts (.all_frames=true) é injetado no iframe, extrai a empresa
+        // do chat e envia via window.postMessage sem nenhum feedback visual.
         if (rawCompany === 'Empresa Indefinida') {
           const teamInboxBtn = document.querySelector<HTMLAnchorElement>('a[href*="/crm/messaging/"]');
           if (teamInboxBtn) {
             try {
-              const scrapeResponse = await new Promise<{
-                success: boolean;
-                companyName?: string;
-                error?: string;
-              }>((resolve) => {
-                // Safety timeout in case the Ghost Tab never responds
-                const timeoutId = setTimeout(() => {
-                  resolve({ success: false, error: 'Timeout (30s) - Ghost Tab não respondeu' });
-                }, 30000);
-
-                chrome.runtime.sendMessage(
-                  { action: 'OPEN_GHOST_TAB', url: teamInboxBtn.href },
-                  (response) => {
-                    clearTimeout(timeoutId);
-                    if (chrome.runtime.lastError) {
-                      resolve({ success: false, error: chrome.runtime.lastError.message });
-                      return;
-                    }
-                    if (response && response.companyName) {
-                      resolve({ success: true, companyName: response.companyName });
-                    } else {
-                      resolve({ success: false, error: 'Empresa não encontrada no Ghost Tab' });
-                    }
-                  },
+              const companyFromIframe = await UIFactory.scrapeTeamInboxViaIframe(
+                teamInboxBtn.href,
+              );
+              if (companyFromIframe) {
+                rawCompany = companyFromIframe;
+                console.log(
+                  `[Atlas Comet] Plano C: Empresa encontrada via Iframe oculto: "${rawCompany}"`,
                 );
-              });
-
-              if (scrapeResponse && scrapeResponse.success && scrapeResponse.companyName) {
-                rawCompany = scrapeResponse.companyName;
-                console.log(`[Atlas Comet] Plano C: Empresa encontrada via Ghost Tab: "${rawCompany}"`);
               } else {
                 console.log(
-                  '[Atlas Comet] Plano C: Scraping do Team Inbox via Ghost Tab falhou',
-                  scrapeResponse?.error,
+                  '[Atlas Comet] Plano C: Scraping via Iframe oculto não retornou empresa.',
                 );
               }
             } catch (e) {
-              console.log('[Atlas Comet] Erro no Plano C (Team Inbox Ghost Tab)', e);
+              console.log('[Atlas Comet] Erro no Plano C (Team Inbox Iframe)', e);
             }
           }
         }
@@ -1842,7 +1820,13 @@ export class UIFactory {
     // Why Ghost Tab instead of FETCH_URL:
     // The Team Inbox is a SPA — raw HTML fetch returns an empty shell
     // (<div id="app"></div>) without any rendered content. The Ghost Tab
-    // lets the browser actually execute the SPA JavaScript.
+    // ─── Layer 7: Team Inbox company via Hidden Iframe (Plano C) ──────────
+    // Last resort for tickets where the company is ONLY available inside the
+    // Team Inbox chat page (e.g., in the "Conversa iniciada de" section).
+    //
+    // Uses scrapeTeamInboxViaIframe to secretly load the Team Inbox SPA inside
+    // an off-screen iframe (position:fixed;left:-9999px) on the current page.
+    // This is 100% invisible to the user (no new tabs or windows opened).
     if (rawCompany === 'Empresa Indefinida') {
       // Search for Team Inbox link in the ticket conversation body.
       // It appears as: <a href="https://...myfreshworks.com/crm/messaging/...">Team Inbox</a>
@@ -1852,45 +1836,19 @@ export class UIFactory {
 
       if (teamInboxLink && ContextManager.isValid()) {
         try {
-          // Open a Ghost Tab to scrape the Team Inbox SPA.
-          // The background script creates a hidden tab, the content script
-          // (Route 0) scrapes it, and sends the result back via GHOST_TAB_RESULT.
-          const scrapeResponse = await new Promise<{
-            success: boolean;
-            companyName?: string;
-            error?: string;
-          }>((resolve) => {
-            // Safety timeout — Ghost Tab has its own 20s timeout, but this
-            // catches cases where the tab crashes or message is lost
-            const timeoutId = setTimeout(() => {
-              resolve({ success: false, error: 'Timeout (30s) - Ghost Tab não respondeu' });
-            }, 30000);
-
-            chrome.runtime.sendMessage(
-              { action: 'OPEN_GHOST_TAB', url: teamInboxLink.href },
-              (response) => {
-                clearTimeout(timeoutId);
-                if (chrome.runtime.lastError) {
-                  resolve({ success: false, error: chrome.runtime.lastError.message });
-                  return;
-                }
-                if (response && response.companyName) {
-                  resolve({ success: true, companyName: response.companyName });
-                } else {
-                  resolve({ success: false, error: 'Empresa não encontrada no Ghost Tab' });
-                }
-              },
+          const companyFromIframe = await UIFactory.scrapeTeamInboxViaIframe(
+            teamInboxLink.href,
+          );
+          if (companyFromIframe) {
+            rawCompany = companyFromIframe;
+            console.log(
+              `[Atlas Comet] Layer 7: Empresa extraída do Team Inbox via Iframe oculto: "${rawCompany}"`,
             );
-          });
-
-          if (scrapeResponse.success && scrapeResponse.companyName) {
-            rawCompany = scrapeResponse.companyName;
-            console.log(`[Atlas Comet] Layer 7: Empresa extraída do Team Inbox via Ghost Tab: "${rawCompany}"`);
           } else {
-            console.log('[Atlas Comet] Layer 7: Ghost Tab falhou:', scrapeResponse.error);
+            console.log('[Atlas Comet] Layer 7: Iframe oculto não encontrou empresa.');
           }
         } catch (e) {
-          console.log('[Atlas Comet] Erro no Layer 7 (Team Inbox Ghost Tab)', e);
+          console.log('[Atlas Comet] Erro no Layer 7 (Team Inbox Iframe)', e);
         }
       }
     }
@@ -1998,6 +1956,63 @@ export class UIFactory {
     } catch (error) {
       console.error('[Atlas Comet] Erro no auto-rename do título do chat:', error);
     }
+  }
+
+  /**
+   * Secretly loads the Team Inbox SPA inside an invisible off-screen iframe
+   * to scrape the company name from the chat without opening any visible
+   * browser tabs or windows.
+   *
+   * Why an iframe instead of a background tab (Ghost Tab):
+   * Opening a tab via chrome.tabs.create({ active: false }) creates a visible
+   * tab in the Chrome tab bar, which distracts the agent. Loading the page
+   * inside an off-screen iframe (position:fixed;left:-9999px) is 100% invisible.
+   *
+   * How it works:
+   * 1. Creates a 1px off-screen iframe pointing to the Team Inbox URL and
+   *    appends it to document.body.
+   * 2. The content script (content.ts, injected via all_frames: true) detects
+   *    the iframe URL (Route 4), waits for the SPA to render, and extracts
+   *    the company name via tryExtractCompany().
+   * 3. Once found (or after 20s timeout), content.ts sends a window.postMessage
+   *    with type: 'ATLAS_COMET_TEAM_INBOX_RESULT' to the parent window.
+   * 4. This method receives the message, cleans up the iframe and listeners,
+   *    and resolves with the extracted company name.
+   *
+   * @param url - The Team Inbox messaging URL from the ticket page
+   * @param timeoutMs - Maximum time to wait for the iframe (default: 20000ms)
+   * @returns Promise resolving to the company name, or null if not found
+   */
+  private static async scrapeTeamInboxViaIframe(
+    url: string,
+    timeoutMs = 20000,
+  ): Promise<string | null> {
+    return new Promise((resolve) => {
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText =
+        'position:fixed;top:0;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;border:none;z-index:-1;';
+      iframe.src = url;
+
+      const timeoutId = setTimeout(() => {
+        window.removeEventListener('message', messageHandler);
+        iframe.remove();
+        console.log('[Atlas Comet] Plano C: Timeout (20s) no scraping via Iframe oculto.');
+        resolve(null);
+      }, timeoutMs);
+
+      const messageHandler = (event: MessageEvent): void => {
+        if (event.data && event.data.type === 'ATLAS_COMET_TEAM_INBOX_RESULT') {
+          clearTimeout(timeoutId);
+          window.removeEventListener('message', messageHandler);
+          iframe.remove();
+          resolve(event.data.companyName || null);
+        }
+      };
+
+      window.addEventListener('message', messageHandler);
+
+      document.body.appendChild(iframe);
+    });
   }
 
 }
